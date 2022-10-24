@@ -1,3 +1,6 @@
 *.o
 *.mod
 *.x
+*.sqlite
+*.qdrep
+*.qdstrm
