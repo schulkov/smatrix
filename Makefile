@@ -3,7 +3,7 @@ FFLAGS = -O3 -Wall -std=f2008
 CC = gcc
 CFLAGS = -O3 -Wall
 NVCC = nvcc
-NVCFLAGS = --shared
+NVCFLAGS = -O3 --shared -arch sm_80 
 
 LIBS = -lcudart
 
