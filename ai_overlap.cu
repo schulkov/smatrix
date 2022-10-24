@@ -8,6 +8,19 @@
 /* a way to switch precision : single <-> double */
 typedef double REAL_T;
 
+
+#define GPU_ERROR_CHECK(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess) 
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+
+
+
 /*
     few special cases derived from CP2K general subroutine
     https://github.com/cp2k/cp2k/blob/master/src/aobasis/ai_overlap.F
@@ -191,9 +204,11 @@ __global__ void overlap_ab_cgf_kernel(
   }
 }
 
+
+
 extern "C" {
 /*
-   overlap integral v0, extremely unoptmized
+   overlap integral v1, unoptmized
    sab : overlap matrix element over contracted Gaussian functions
    la_set, lb_set : angular momenta
    npgf_a, npgf_b : number of primitive Gaussian functions in contracted sets
@@ -215,29 +230,31 @@ void overlap_ab_cgf(
    REAL_T *gcc_a_dev = NULL;
    REAL_T *gcc_b_dev = NULL;
 
-   cudaError_t cuda_err;
-   cuda_err = cudaMalloc( (void**) &sab_pgf_dev, npgf_a*npgf_b*ncoa*ncob*sizeof(REAL_T) );
-   cuda_err = cudaMalloc( (void**) &sab_dev, ncoa*ncob*sizeof(REAL_T) );
-   cuda_err = cudaMalloc( (void**) &zet_a_dev, npgf_a*sizeof(REAL_T) );
-   cuda_err = cudaMalloc( (void**) &zet_b_dev, npgf_b*sizeof(REAL_T) );
-   cuda_err = cudaMalloc( (void**) &gcc_a_dev, ncoa*npgf_a*sizeof(REAL_T) );
-   cuda_err = cudaMalloc( (void**) &gcc_b_dev, ncob*npgf_b*sizeof(REAL_T) );
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &sab_pgf_dev, npgf_a*npgf_b*ncoa*ncob*sizeof(REAL_T) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &sab_dev, ncoa*ncob*sizeof(REAL_T) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &zet_a_dev, npgf_a*sizeof(REAL_T) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &zet_b_dev, npgf_b*sizeof(REAL_T) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &gcc_a_dev, ncoa*npgf_a*sizeof(REAL_T) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &gcc_b_dev, ncob*npgf_b*sizeof(REAL_T) ));
    
-   cuda_err = cudaMemcpy( zet_a_dev, zet_a, npgf_a*sizeof(REAL_T), cudaMemcpyHostToDevice );
-   cuda_err = cudaMemcpy( zet_b_dev, zet_b, npgf_b*sizeof(REAL_T), cudaMemcpyHostToDevice );
-   cuda_err = cudaMemcpy( gcc_a_dev, gcc_a, ncoa*npgf_a*sizeof(REAL_T), cudaMemcpyHostToDevice );
-   cuda_err = cudaMemcpy( gcc_b_dev, gcc_b, ncob*npgf_b*sizeof(REAL_T), cudaMemcpyHostToDevice );
-   cuda_err = cudaMemset( sab_dev, 0, ncoa*ncob*sizeof(REAL_T));
-//   printf("A %d %d %d %d %d \n", npgf_a, npgf_b, la_set, lb_set, cuda_err );
+   GPU_ERROR_CHECK(cudaMemcpy( zet_a_dev, zet_a, npgf_a*sizeof(REAL_T), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( zet_b_dev, zet_b, npgf_b*sizeof(REAL_T), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( gcc_a_dev, gcc_a, ncoa*npgf_a*sizeof(REAL_T), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( gcc_b_dev, gcc_b, ncob*npgf_b*sizeof(REAL_T), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemset( sab_dev, 0, ncoa*ncob*sizeof(REAL_T)));
 
    dim3 npgf_ab(npgf_a, npgf_b);
    overlap_ab_cgf_kernel<<<1, npgf_ab >>>(
          sab_dev, sab_pgf_dev, gcc_a_dev, gcc_b_dev, zet_a_dev, zet_b_dev,
          la_set, lb_set, ncoa, ncob, rab_x, rab_y, rab_z );
-//   printf("A  %d %d \n", cuda_err, cudaGetLastError() );
-   cuda_err = cudaMemcpy( sab, sab_dev, ncoa*ncob*sizeof(REAL_T), cudaMemcpyDeviceToHost );
-   cudaFree(sab_pgf_dev);
-   cudaFree(sab_dev);
+   GPU_ERROR_CHECK(cudaGetLastError() );
+   GPU_ERROR_CHECK(cudaMemcpy( sab, sab_dev, ncoa*ncob*sizeof(REAL_T), cudaMemcpyDeviceToHost ));
+   GPU_ERROR_CHECK(cudaFree(zet_a_dev));
+   GPU_ERROR_CHECK(cudaFree(zet_b_dev));
+   GPU_ERROR_CHECK(cudaFree(gcc_a_dev));
+   GPU_ERROR_CHECK(cudaFree(gcc_b_dev));
+   GPU_ERROR_CHECK(cudaFree(sab_pgf_dev));
+   GPU_ERROR_CHECK(cudaFree(sab_dev));
 }
 
 
