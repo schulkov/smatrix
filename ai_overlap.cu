@@ -39,20 +39,6 @@ __host__ __device__ void overlap_primitive_ss(REAL_T *sab, REAL_T zeta, REAL_T z
    *sab = f0*exp(-zeta*f1*dab*dab);
 }
 
-void overlap_primitive_ss_cpu(REAL_T *sab, REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
-{
-   REAL_T dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
-
-   //  *** Prefactors ***
-   REAL_T zetp = ((REAL_T)1.0)/(zeta+zetb);
-   REAL_T pi_zetp = M_PI * zetp;
-   REAL_T f0 = pi_zetp*sqrt(pi_zetp);
-   REAL_T f1 = zetb*zetp;
-
-   *sab = f0*exp(-zeta*f1*dab*dab);
-}
-
-
 __host__ __device__ void overlap_primitive_sp(REAL_T *sab, REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
 {
    REAL_T dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
@@ -92,43 +78,6 @@ __host__ __device__ void overlap_primitive_ps(REAL_T *sab, REAL_T zeta, REAL_T z
    sab[1] = rap_y*s0; // [py|s]
    sab[2] = rap_z*s0; // [pz|s]
 }
-
-void overlap_primitive_pp_cpu(REAL_T *sab, REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
-{
-   REAL_T dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
-
-   //  *** Prefactors ***
-   REAL_T zetp = ((REAL_T)1.0)/(zeta+zetb);
-   REAL_T pi_zetp = M_PI * zetp;
-   REAL_T f0 = sqrt(pi_zetp*pi_zetp*pi_zetp);
-   REAL_T f1 = zetb*zetp;
-   REAL_T f2 = ((REAL_T)0.5)*zetp;
-   REAL_T rap_x = f1*rab_x;
-   REAL_T rap_y = f1*rab_y;
-   REAL_T rap_z = f1*rab_z;
-   REAL_T rbp_x = rap_x-rab_x;
-   REAL_T rbp_y = rap_y-rab_y;
-   REAL_T rbp_z = rap_z-rab_z;
-   REAL_T s0, s1;
-
-   s0 = f0*exp(-zeta*f1*dab*dab); // [s|s]
-
-   s1 = rap_x*s0; // [px|s]
-   sab[0] = rbp_x*s1+f2*s0; // [px|px]
-   sab[1] = rbp_y*s1; // [px|py]
-   sab[2] = rbp_z*s1; // [px|pz]
-
-   s1 = rap_y*s0; // [py|s]
-   sab[3] = rbp_x*s1; // [py|px]
-   sab[4] = rbp_y*s1+f2*s0; // [py|py]
-   sab[5] = rbp_z*s1; // [py|pz]
-
-   s1 = rap_z*s0; // [pz|s]
-   sab[6] = rbp_x*s1; // [pz|px]
-   sab[7] = rbp_y*s1; // [pz|py]
-   sab[8] = rbp_z*s1+f2*s0; // [pz|pz]
-}
-
 
 __host__ __device__ void overlap_primitive_pp(REAL_T *sab, REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
 {
@@ -184,6 +133,16 @@ __global__ void overlap_ab_cgf_kernel(
    int npgf_a = blockDim.x;
    int npgf_b = blockDim.y;
    REAL_T gccSgcc_ab;
+   /*
+      For each pair of gaussian ipgf_a,ipgf_b, fill S_ab_pgf with the correct polynomial[r,e-mr2]
+      Once that is done, accumulate the S_ab = <c_a|S_ab_pgf|c_b> on the ncoa,ncob matrix
+      With  S_ab_pgf = product between primitive gaussian functions
+            S_ab     = product between contracted gaussian functions
+            c_a      = contraction coefficients of a
+      Note: a lot of confusion is due to the fact that one set of exponents is associated
+            with a set of wavefunction with the same center and angular moment, like [px,py,pz]
+            which then have different contraction coefficients
+   */
    if (la_set == 0 && lb_set == 0) {
       overlap_primitive_ss(&sab_pgf_dev[(ipgf_a*npgf_b+ipgf_b)*ncoa*ncob], zet_a_dev[ipgf_a], zet_b_dev[ipgf_b], rab_x, rab_y, rab_z);
    } else if (la_set == 0 && lb_set == 1) {
@@ -198,7 +157,6 @@ __global__ void overlap_ab_cgf_kernel(
       for (unsigned int icoa = 0; icoa < ncoa; ++icoa) {
          gccSgcc_ab = sab_pgf_dev[(ipgf_a*npgf_b+ipgf_b)*ncoa*ncob+icob*ncoa+icoa] * 
                          gcc_a_dev[icoa*npgf_a+ipgf_a] * gcc_b_dev[icob*npgf_b+ipgf_b];
-//         sab_dev[icob*ncoa+icoa] += gccSgcc_ab;
          atomicAdd_block(&sab_dev[icob*ncoa+icoa], gccSgcc_ab);
       }
   }
@@ -274,9 +232,9 @@ void norm_cgf_gto(int l_set, int npgf, const REAL_T *zet, const REAL_T *gcc, REA
       for (unsigned int jpgf = 0; jpgf < npgf; ++jpgf) {
           if (l_set == 0) {
              // sab(:, :, jpgf, ipgf)
-             overlap_primitive_ss_cpu(sab+(ipgf*npgf+jpgf)*nco*nco, zet[jpgf], zet[ipgf], zero, zero, zero);
+             overlap_primitive_ss(sab+(ipgf*npgf+jpgf)*nco*nco, zet[jpgf], zet[ipgf], zero, zero, zero);
           } else if (l_set == 1) {
-             overlap_primitive_pp_cpu(sab+(ipgf*npgf+jpgf)*nco*nco, zet[jpgf], zet[ipgf], zero, zero, zero);
+             overlap_primitive_pp(sab+(ipgf*npgf+jpgf)*nco*nco, zet[jpgf], zet[ipgf], zero, zero, zero);
           }
       }
    }
