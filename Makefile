@@ -2,6 +2,10 @@ FC = gfortran
 FFLAGS = -O3 -Wall -std=f2008
 CC = gcc
 CFLAGS = -O3 -Wall
+NVCC = nvcc
+NVCFLAGS = --shared
+
+LIBS = -lcudart
 
 # Avoid funny character set dependencies
 unexport LC_ALL
@@ -27,17 +31,17 @@ mathlib.o: mathlib.f90 mathconstants.o
 orbtramat.o: orbtramat.f90 mathconstants.o mathlib.o
 	$(FC) $(FFLAGS) -c -o $@ $<
 
-ai_overlap.o: ai_overlap.c mathconstants.o orbtramat.o
-	$(CC) $(CFLAGS) -c -o $@ $<
+ai_overlap.o: ai_overlap.cu mathconstants.o orbtramat.o
+	$(NVCC) $(NVCFLAGS) -c -o $@ $< $(LIBS)
 
 cgf_utils.o: cgf_utils.f90 kinds.o orbtramat.o ai_overlap.o
 	$(FC) $(FFLAGS) -c -o $@ $<
 
 smatrix_sgf_dense.x: smatrix_sgf_dense.f90 kinds.o ai_overlap.o mathconstants.o orbtramat.o mathlib.o cgf_utils.o
-	$(FC) $(FFLAGS) -o $@ $^
+	$(FC) $(FFLAGS) -o $@ $^ $(LIBS)
 
 smatrix_sgf_sparse.x: smatrix_sgf_sparse.f90 kinds.o ai_overlap.o mathconstants.o orbtramat.o mathlib.o cgf_utils.o
-	$(FC) $(FFLAGS) -o $@ $^
+	$(FC) $(FFLAGS) -o $@ $^ $(LIBS)
 
 clean:
 	rm -f *.o *.mod *.x
