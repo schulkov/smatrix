@@ -134,14 +134,11 @@ __global__ void overlap_ab_cgf_kernel(
    int npgf_b = blockDim.y;
    REAL_T gccSgcc_ab;
    /*
-      For each pair of gaussian ipgf_a,ipgf_b, fill S_ab_pgf with the correct polynomial[r,e-mr2]
+      For each pair of primitives ipgf_a,ipgf_b, fill S_ab_pgf with the correct polynomial[r,e-mr2]
       Once that is done, accumulate the S_ab = <c_a|S_ab_pgf|c_b> on the ncoa,ncob matrix
       With  S_ab_pgf = product between primitive gaussian functions
             S_ab     = product between contracted gaussian functions
             c_a      = contraction coefficients of a
-      Note: a lot of confusion is due to the fact that one set of exponents is associated
-            with a set of wavefunction with the same center and angular moment, like [px,py,pz]
-            which then have different contraction coefficients
    */
    if (la_set == 0 && lb_set == 0) {
       overlap_primitive_ss(&sab_pgf_dev[(ipgf_a*npgf_b+ipgf_b)*ncoa*ncob], zet_a_dev[ipgf_a], zet_b_dev[ipgf_b], rab_x, rab_y, rab_z);
@@ -202,6 +199,7 @@ void overlap_ab_cgf(
    GPU_ERROR_CHECK(cudaMemset( sab_dev, 0, ncoa*ncob*sizeof(REAL_T)));
 
    dim3 npgf_ab(npgf_a, npgf_b);
+   printf("A %d %d %d \n", npgf_a*npgf_b, ncoa, ncob);
    overlap_ab_cgf_kernel<<<1, npgf_ab >>>(
          sab_dev, sab_pgf_dev, gcc_a_dev, gcc_b_dev, zet_a_dev, zet_b_dev,
          la_set, lb_set, ncoa, ncob, rab_x, rab_y, rab_z );
