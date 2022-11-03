@@ -199,7 +199,7 @@ void overlap_ab_cgf(
    GPU_ERROR_CHECK(cudaMemset( sab_dev, 0, ncoa*ncob*sizeof(REAL_T)));
 
    dim3 npgf_ab(npgf_a, npgf_b);
-   printf("A %d %d %d \n", npgf_a*npgf_b, ncoa, ncob);
+//   printf("A %d %d %d \n", npgf_a*npgf_b, ncoa, ncob);
    overlap_ab_cgf_kernel<<<1, npgf_ab >>>(
          sab_dev, sab_pgf_dev, gcc_a_dev, gcc_b_dev, zet_a_dev, zet_b_dev,
          la_set, lb_set, ncoa, ncob, rab_x, rab_y, rab_z );

@@ -13,6 +13,7 @@ PRIVATE
 
    PUBLIC  :: norm_cgf_gto_interface, overlap_ab_cgf_interface
    PUBLIC  :: convert_matrix_cgf_to_sgf
+   PUBLIC  :: add_shell
 
    TYPE atom_type
       ! atomic nuclear charge
@@ -233,4 +234,36 @@ CONTAINS
       END DO
       DEALLOCATE (c2s_matrices)
    END SUBROUTINE convert_matrix_cgf_to_sgf
+   subroutine add_shell( icgf, cgf , env, curr_env_offset, bas, atom )
+      implicit none
+      integer, intent(in) :: icgf
+      type(cgf_type), intent(in) :: cgf
+      real(kind=dp), dimension(:), intent(out)  :: env
+      integer, intent(inout) :: curr_env_offset
+      integer, intent(out), dimension(:,:) :: bas
+      type( atom_type ), intent(in) :: atom
+      integer :: n_z, n_c
+      n_z = cgf%npgf
+      n_c = 1 ! no same zet tricks
+      bas(icgf,1) = cgf%iatom
+      bas(icgf,2) = cgf%l
+      bas(icgf,3) = n_z
+      bas(icgf,4) = n_c
+      bas(icgf,5) = 0
+      ! todo all shells of the same basis set and element share these
+      ! coefficients
+      bas(icgf,6) = curr_env_offset
+      env(curr_env_offset:curr_env_offset+n_z-1) = cgf%zet
+      curr_env_offset = curr_env_offset + n_z
+      ! same todo as above
+      bas(icgf,7) = curr_env_offset
+      env(curr_env_offset:curr_env_offset+n_z*n_c-1) = cgf%gcc
+      curr_env_offset = curr_env_offset + n_z*n_c
+      ! todo all shells on the same atom share this
+      bas(icgf,8) = curr_env_offset
+      env(curr_env_offset:curr_env_offset+2) = atom%r
+      curr_env_offset = curr_env_offset + 3
+   end subroutine add_shell
+ 
+
 END MODULE cgf_utils
