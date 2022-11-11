@@ -3,8 +3,7 @@ FFLAGS = -O3 -Wall -std=f2008
 CC = gcc
 CFLAGS = -O3 -Wall
 NVCC = nvcc
-NVCFLAGS = -O3 --shared -arch sm_80 
-
+NVCFLAGS = -O3 --shared -arch=sm_70 --compiler-options -Wall
 LIBS = -lcudart
 
 # Avoid funny character set dependencies
@@ -17,7 +16,7 @@ export LC_COLLATE LC_NUMERIC
 unexport GREP_OPTIONS
 
 PHONY := make clean
-make: smatrix_sgf_dense.x smatrix_sgf_sparse.x smatrix_sgf_sparse_prescreen.x
+make: smatrix_sgf_dense.x smatrix_sgf_sparse.x prescreen_smatrix_sgf_sparse.x
 
 kinds.o: kinds.f90
 	$(FC) $(FFLAGS) -c -o $@ $<
@@ -43,7 +42,7 @@ smatrix_sgf_dense.x: smatrix_sgf_dense.f90 kinds.o ai_overlap.o mathconstants.o 
 smatrix_sgf_sparse.x: smatrix_sgf_sparse.f90 kinds.o ai_overlap.o mathconstants.o orbtramat.o mathlib.o cgf_utils.o
 	$(FC) $(FFLAGS) -o $@ $^ $(LIBS)
 
-smatrix_sgf_sparse_prescreen.x: smatrix_sgf_sparse_prescreen.f90 kinds.o ai_overlap.o mathconstants.o orbtramat.o mathlib.o cgf_utils.o
+prescreen_smatrix_sgf_sparse.x: prescreen_smatrix_sgf_sparse.f90 kinds.o ai_overlap.o mathconstants.o orbtramat.o mathlib.o cgf_utils.o
 	$(FC) $(FFLAGS) -o $@ $^ $(LIBS)
 
 clean:

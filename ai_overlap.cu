@@ -115,7 +115,7 @@ __host__ __device__ void overlap_primitive_pp(REAL_T *sab, REAL_T zeta, REAL_T z
    sab[8] = rbp_z*s1+f2*s0; // [pz|pz]
 }
 
-inline unsigned int get_nco(int l)
+__host__ __device__ inline unsigned int get_nco(int l)
 {
    unsigned int nco = 0;
 
@@ -172,7 +172,7 @@ extern "C" {
 
    Unlike Fortran, arrays' indicies in C start from 0.
 */
-void overlap_ab_cgf(
+void overlap_ab_cgf_gpu_legacy(
    REAL_T *sab, int la_set, int npgf_a, const REAL_T *zet_a, const REAL_T *gcc_a,
    int lb_set, int npgf_b, const REAL_T *zet_b, const REAL_T *gcc_b, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
 {
@@ -213,6 +213,151 @@ void overlap_ab_cgf(
    GPU_ERROR_CHECK(cudaFree(sab_dev));
 }
 
+void overlap_ab_cgf(REAL_T *sab, int la_set, int npgf_a, const REAL_T *zet_a, const REAL_T *gcc_a, int lb_set, int npgf_b, const REAL_T *zet_b,
+                    const REAL_T *gcc_b, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
+{
+   unsigned int ncoa = get_nco(la_set);
+   unsigned int ncob = get_nco(lb_set);
+   REAL_T *sab_pgf = NULL;
+
+   sab_pgf = (REAL_T*) malloc(ncoa*ncob*sizeof(*sab_pgf));
+   if (sab_pgf == NULL) return;
+
+   memset(sab, 0, ncoa*ncob*sizeof(*sab));
+
+   for ( int ipgf_b = 0; ipgf_b < npgf_b; ++ipgf_b) {
+      for ( int ipgf_a = 0; ipgf_a < npgf_a; ++ipgf_a) {
+          if (la_set == 0 && lb_set == 0) {
+             overlap_primitive_ss(sab_pgf, zet_a[ipgf_a], zet_b[ipgf_b], rab_x, rab_y, rab_z);
+          } else if (la_set == 0 && lb_set == 1) {
+             overlap_primitive_sp(sab_pgf, zet_a[ipgf_a], zet_b[ipgf_b], rab_x, rab_y, rab_z);
+          } else if (la_set == 1 && lb_set == 0) {
+             overlap_primitive_ps(sab_pgf, zet_a[ipgf_a], zet_b[ipgf_b], rab_x, rab_y, rab_z);
+          } else if (la_set == 1 && lb_set == 1) {
+             overlap_primitive_pp(sab_pgf, zet_a[ipgf_a], zet_b[ipgf_b], rab_x, rab_y, rab_z);
+          }
+
+          for (unsigned int icob = 0; icob < ncob; ++icob) {
+             for (unsigned int icoa = 0; icoa < ncoa; ++icoa) {
+                sab[icob*ncoa+icoa] += sab_pgf[icob*ncoa+icoa] * gcc_a[icoa*npgf_a+ipgf_a] * gcc_b[icob*npgf_b+ipgf_b];
+             }
+          }
+      }
+   }
+
+   free(sab_pgf);
+}
+
+#define PAL_SLOTS 3
+#define BAS_SLOTS 8
+#define BAS_OFFSET_L 1
+#define BAS_OFFSET_NPGF 2
+#define BAS_OFFSET_Z 5
+#define BAS_OFFSET_C 6
+#define BAS_OFFSET_R 7
+
+//   call compute_s ( list_ijd, atm, bas, env, s_sparse )
+//  dim3 max_npgf_ab(max_npgf_col, mx_npgf_row)
+//__global__ void compute_s_gpu<<< n_pairs, max_npgf_ab>>> ( int* list_ijd_dev, int* bas_dev, double* env_dev, double* s_sparse_dev )
+
+__global__ void compute_s_gpu_kernel ( int* list_ijd_dev, int* bas_dev, double* env_dev, double* s_sparse_dev )
+{
+   int ijd_idx = blockIdx.x * PAL_SLOTS;
+   int i = ( list_ijd_dev[ ijd_idx + 0 ] - 1 ) * BAS_SLOTS;
+   int j = ( list_ijd_dev[ ijd_idx + 1 ] - 1 ) * BAS_SLOTS;
+   int s_offset = list_ijd_dev[ ijd_idx + 2 ] - 1 ; // might be pushed to after the if, but it is more elegant here
+   int ipgf_a = threadIdx.x;
+   int ipgf_b = threadIdx.y;
+   int npgf_a = bas_dev[i+BAS_OFFSET_NPGF];
+   int npgf_b = bas_dev[j+BAS_OFFSET_NPGF];
+   // We size the block to accomodate the largest contractionso smaller contractions only use a subset of the threads
+   // so smaller contractions only use a subset of the threads
+   // worse case is a contraction with high angular moment and a single coefficient
+   // in which case one thread is doing all L calculations
+   if ( (ipgf_a<npgf_a) and(ipgf_b<npgf_b)) {
+      int la = bas_dev[i+BAS_OFFSET_L];
+      int lb = bas_dev[j+BAS_OFFSET_L];
+      int ncoa = get_nco(la);
+      int ncob = get_nco(lb);
+      double zet_a = env_dev[ bas_dev[i+BAS_OFFSET_Z] + ipgf_a ];
+      double zet_b = env_dev[ bas_dev[j+BAS_OFFSET_Z] + ipgf_b ];
+      double* gcc_a = &env_dev[ bas_dev[i+BAS_OFFSET_C] ];
+      double* gcc_b = &env_dev[ bas_dev[j+BAS_OFFSET_C] ];
+      double ra_x = env_dev[ bas_dev[i+BAS_OFFSET_R] + 0 ];
+      double ra_y = env_dev[ bas_dev[i+BAS_OFFSET_R] + 1 ];
+      double ra_z = env_dev[ bas_dev[i+BAS_OFFSET_R] + 2 ];
+      double rb_x = env_dev[ bas_dev[j+BAS_OFFSET_R] + 0 ];
+      double rb_y = env_dev[ bas_dev[j+BAS_OFFSET_R] + 1 ];
+      double rb_z = env_dev[ bas_dev[j+BAS_OFFSET_R] + 2 ];
+      double rab_x = ra_x - rb_x;
+      double rab_y = ra_y - rb_y;
+      double rab_z = ra_z - rb_z;
+      double sab_pgf[9]; // ncoa*ncob]; // if L = 6, this is ((6+1)*(6+2)/2)**2 = 784 doubles per thread. Not great. Also, this needs to be constant ( at compile time ?)
+      double cSc_ab;
+      sab_pgf[0] = 0.0 ;
+      sab_pgf[1] = 0.0 ;
+      sab_pgf[2] = 0.0 ;
+      sab_pgf[3] = 0.0 ;
+      sab_pgf[4] = 0.0 ;
+      sab_pgf[5] = 0.0 ;
+      sab_pgf[6] = 0.0 ;
+      sab_pgf[7] = 0.0 ;
+      sab_pgf[8] = 0.0 ;
+
+      //
+      // Compute the gaussian integrals and saves them in sab_pgf
+      if (la == 0 && lb == 0) {
+         overlap_primitive_ss(&sab_pgf[0], zet_a, zet_b, rab_x, rab_y, rab_z);
+      } else if (la == 0 && lb == 1) {
+         overlap_primitive_sp(sab_pgf, zet_a, zet_b, rab_x, rab_y, rab_z);
+      } else if (la == 1 && lb == 0) {
+         overlap_primitive_ps(sab_pgf, zet_a, zet_b, rab_x, rab_y, rab_z);
+      } else if (la == 1 && lb == 1) {
+         overlap_primitive_pp(sab_pgf, zet_a, zet_b, rab_x, rab_y, rab_z);
+      }
+
+      // Contract the gaussian integrals to the different products between basis set functions
+      for (unsigned int icob = 0; icob < ncob; ++icob) {
+         for (unsigned int icoa = 0; icoa < ncoa; ++icoa) {
+            cSc_ab = sab_pgf[icob*ncoa+icoa] *  gcc_a[icoa*npgf_a+ipgf_a] * gcc_b[icob*npgf_b+ipgf_b];
+            // Thanks to s_offset, writes to sab_dev from different blocks will never overlap
+            atomicAdd_block(&s_sparse_dev[s_offset + icob*ncoa+icoa ], cSc_ab);
+         }
+      }
+   }
+}
+
+void compute_s_gpu ( int* list_ijd, int* bas, REAL_T* env, REAL_T* s_sparse,
+                     int n_pairs,   int nbas, int env_size, int s_sparse_size,
+                     int max_npgf_col, int max_npgf_row )
+{
+   int* list_ijd_dev = NULL;
+   int* bas_dev = NULL;
+   REAL_T* env_dev = NULL;
+   REAL_T* s_sparse_dev = NULL;
+   dim3 max_npgf_ab(max_npgf_col, max_npgf_row);
+
+   // copy list of pairs and enviroment to gpu
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &list_ijd_dev, n_pairs * PAL_SLOTS * sizeof(int) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &bas_dev, nbas * BAS_SLOTS * sizeof(int) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &env_dev, env_size * sizeof(REAL_T) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &s_sparse_dev, s_sparse_size * sizeof(REAL_T) ));
+
+   GPU_ERROR_CHECK(cudaMemcpy( list_ijd_dev, list_ijd, n_pairs * PAL_SLOTS * sizeof(int), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( bas_dev, bas, nbas * BAS_SLOTS * sizeof(int), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( env_dev, env, env_size * sizeof(REAL_T), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemset( s_sparse_dev, 0.0, s_sparse_size*sizeof(REAL_T)));
+   // work
+   compute_s_gpu_kernel<<< n_pairs, max_npgf_ab>>> ( list_ijd_dev, bas_dev, env_dev, s_sparse_dev );
+   GPU_ERROR_CHECK(cudaGetLastError() );
+   // copy back to ram and free memory
+   GPU_ERROR_CHECK(cudaMemcpy( s_sparse, s_sparse_dev, s_sparse_size * sizeof(REAL_T), cudaMemcpyDeviceToHost ));
+   GPU_ERROR_CHECK(cudaFree(list_ijd_dev));
+   GPU_ERROR_CHECK(cudaFree(bas_dev));
+   GPU_ERROR_CHECK(cudaFree(env_dev));
+   GPU_ERROR_CHECK(cudaFree(s_sparse_dev));
+}
+
 
 void norm_cgf_gto(int l_set, int npgf, const REAL_T *zet, const REAL_T *gcc, REAL_T *gcc_total)
 {
@@ -226,8 +371,8 @@ void norm_cgf_gto(int l_set, int npgf, const REAL_T *zet, const REAL_T *gcc, REA
    sab = (REAL_T*) malloc(nco*nco*npgf*npgf*sizeof(*sab));
    if (sab == NULL) return;
 
-   for (unsigned int ipgf = 0; ipgf < npgf; ++ipgf) {
-      for (unsigned int jpgf = 0; jpgf < npgf; ++jpgf) {
+   for (int ipgf = 0; ipgf < npgf; ++ipgf) {
+      for (int jpgf = 0; jpgf < npgf; ++jpgf) {
           if (l_set == 0) {
              // sab(:, :, jpgf, ipgf)
              overlap_primitive_ss(sab+(ipgf*npgf+jpgf)*nco*nco, zet[jpgf], zet[ipgf], zero, zero, zero);
@@ -238,14 +383,14 @@ void norm_cgf_gto(int l_set, int npgf, const REAL_T *zet, const REAL_T *gcc, REA
    }
 
    for (unsigned int ico = 0; ico < nco; ++ico) {
-      for (unsigned int ipgf = 0; ipgf < npgf; ++ipgf) {
+      for (int ipgf = 0; ipgf < npgf; ++ipgf) {
          // sab(ico, ico, ipgf, ipgf)
          gcc_total[ico*npgf+ipgf] = gcc[ipgf] / sqrt(sab[((ipgf*npgf+ipgf)*nco+ico)*nco+ico]);
       }
 
       norm = (REAL_T)0.0;
-      for (unsigned int ipgf = 0; ipgf < npgf; ++ipgf) {
-         for (unsigned int jpgf = 0; jpgf < npgf; ++jpgf) {
+      for ( int ipgf = 0; ipgf < npgf; ++ipgf) {
+         for ( int jpgf = 0; jpgf < npgf; ++jpgf) {
              // sab(ico, ico, jpgf, ipgf)
              norm += sab[((ipgf*npgf+jpgf)*nco+ico)*nco+ico] * gcc_total[ico*npgf+jpgf] * gcc_total[ico*npgf+ipgf];
          }
@@ -253,11 +398,13 @@ void norm_cgf_gto(int l_set, int npgf, const REAL_T *zet, const REAL_T *gcc, REA
 
       norm = (REAL_T)1.0 / sqrt(norm);
 
-      for (unsigned int ipgf = 0; ipgf < npgf; ++ipgf) {
+      for ( int ipgf = 0; ipgf < npgf; ++ipgf) {
          gcc_total[ico*npgf+ipgf] = gcc_total[ico*npgf+ipgf] * norm;
       }
    }
 
    free(sab);
 }
-}
+
+
+} // end of extern C

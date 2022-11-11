@@ -14,6 +14,7 @@ PRIVATE
    PUBLIC  :: norm_cgf_gto_interface, overlap_ab_cgf_interface
    PUBLIC  :: convert_matrix_cgf_to_sgf
    PUBLIC  :: add_shell
+   PUBLIC  :: compute_s_gpu
 
    TYPE atom_type
       ! atomic nuclear charge
@@ -47,8 +48,14 @@ PRIVATE
          INTEGER(kind=C_INT), VALUE :: l_set, npgf
          TYPE(C_PTR), VALUE :: zet, gcc, gcc_total
       END SUBROUTINE norm_cgf_gto
-   END INTERFACE
 
+      subroutine compute_s_gpu_interface(list_ijd, bas, env, s_sparse, n_pairs, nbas, env_size, &
+                               s_sparse_size, max_npgf_col, max_npgf_row ) bind (C, name='compute_s_gpu')
+         import :: c_int, c_double, c_ptr
+         type(c_ptr), value :: list_ijd, bas, env, s_sparse
+         integer( kind=c_int), value :: n_pairs, nbas, env_size, s_sparse_size, max_npgf_col, max_npgf_row
+      end subroutine compute_s_gpu_interface
+   END INTERFACE
 CONTAINS
 
    SUBROUTINE cgf_release(cgf)
@@ -234,6 +241,7 @@ CONTAINS
       END DO
       DEALLOCATE (c2s_matrices)
    END SUBROUTINE convert_matrix_cgf_to_sgf
+
    subroutine add_shell( icgf, cgf , env, curr_env_offset, bas, atom )
       implicit none
       integer, intent(in) :: icgf
@@ -244,26 +252,36 @@ CONTAINS
       type( atom_type ), intent(in) :: atom
       integer :: n_z, n_c
       n_z = cgf%npgf
-      n_c = 1 ! no same zet tricks
-      bas(icgf,1) = cgf%iatom
-      bas(icgf,2) = cgf%l
-      bas(icgf,3) = n_z
-      bas(icgf,4) = n_c
-      bas(icgf,5) = 0
-      ! todo all shells of the same basis set and element share these
-      ! coefficients
-      bas(icgf,6) = curr_env_offset
+      n_c = get_nco(cgf%l)
+      bas(1,icgf) = cgf%iatom
+      bas(2,icgf) = cgf%l
+      bas(3,icgf) = n_z
+      bas(4,icgf) = n_c ! ? ???
+      bas(5,icgf) = 0
+      ! todo all shells of the same basis set and element share these coefficients
+      ! -1 for c indexing
+      bas(6,icgf) = curr_env_offset - 1
       env(curr_env_offset:curr_env_offset+n_z-1) = cgf%zet
       curr_env_offset = curr_env_offset + n_z
       ! same todo as above
-      bas(icgf,7) = curr_env_offset
-      env(curr_env_offset:curr_env_offset+n_z*n_c-1) = cgf%gcc
+      bas(7,icgf) = curr_env_offset - 1
+      env(curr_env_offset:curr_env_offset+n_z*n_c-1) = pack(cgf%gcc_total, .true.)
       curr_env_offset = curr_env_offset + n_z*n_c
       ! todo all shells on the same atom share this
-      bas(icgf,8) = curr_env_offset
+      bas(8,icgf) = curr_env_offset - 1
       env(curr_env_offset:curr_env_offset+2) = atom%r
       curr_env_offset = curr_env_offset + 3
+!      print *, 'Adding basis', icgf, bas(:,icgf), env(bas(6,icgf):bas(6,icgf)+n_z-1)
    end subroutine add_shell
  
-
+   subroutine compute_s_gpu(list_ijd, bas, env, s_sparse, n_pairs, nbas, env_size, &
+                               s_sparse_size, max_npgf_col, max_npgf_row )
+      implicit none
+      integer, dimension(:,:), target :: list_ijd, bas
+      real(kind=dp), dimension(:), target :: env, s_sparse
+      integer  :: n_pairs, nbas, env_size, s_sparse_size, max_npgf_col, max_npgf_row
+ 
+      call compute_s_gpu_interface(c_loc(list_ijd(1,1)), c_loc(bas(1,1)), c_loc(env(1)), c_loc(s_sparse(1)), &
+                                   n_pairs, nbas, env_size, s_sparse_size, max_npgf_col, max_npgf_row )
+   end subroutine compute_s_gpu
 END MODULE cgf_utils
