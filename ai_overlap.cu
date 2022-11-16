@@ -5,6 +5,9 @@
 /* memset() */
 #include <string.h>
 #include <stdio.h>
+
+
+#define MATH_PI 
 /* a way to switch precision : single <-> double */
 typedef double REAL_T;
 
@@ -114,6 +117,356 @@ __host__ __device__ void overlap_primitive_pp(REAL_T *sab, REAL_T zeta, REAL_T z
    sab[7] = rbp_y*s1; // [pz|py]
    sab[8] = rbp_z*s1+f2*s0; // [pz|pz]
 }
+
+__host__ __device__ int ncoset( int l_max ){
+  int nco = 0;
+  for( int l=0; l <= l_max; l++ ){
+    nco += (l+1)*(l+2)/2;
+  }
+  return nco;
+}
+
+__host__ __device__ int coset( int lx, int ly, int lz ){
+  int l = lx + ly + lz;
+  int co = 1 + (l - lx)*(l - lx + 1)/2 + lz;
+  return ncoset(l - 1) + co - 1 ;
+}
+
+__host__ __device__ void overlap( REAL_T *s , REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z, int la_max, int lb_max){
+//       *** Calculate some prefactors ***
+            REAL_T zetp = 1.0/(zeta + zetb);
+            REAL_T f0 = sqrt((M_PI*zetp)*(M_PI*zetp)*(M_PI*zetp));
+            REAL_T f1 = zetb*zetp;
+            REAL_T f2 = 0.5*zetp;
+            REAL_T f3, f4;
+            REAL_T rap[3];
+            REAL_T rbp[3];
+            REAL_T dab = sqrt( rab_x*rab_x + rab_y*rab_y + rab_z*rab_z );
+
+            int Na = ncoset(la_max);
+
+//       *** Calculate the basic two-center overlap integral [s|s] ***
+            s[0] = f0*exp(-zeta*f1*dab*dab); //! [s|s]
+//       *** Recurrence steps: [s|s] -> [a|b] ***
+            if (la_max > 0) {
+//         *** Vertical recurrence steps: [s|s] -> [a|s] ***
+               rap[0] = f1*rab_x ; 
+               rap[1] = f1*rab_y ; 
+               rap[2] = f1*rab_z ; 
+//         *** [p|s] = (Pi - Ai)*[s|s]  (i = x,y,z) ***
+               s[1] = rap[0]*s[0]; //! [px|s]
+               s[2] = rap[1]*s[0]; //! [py|s]
+               s[3] = rap[2]*s[0]; //! [pz|s]
+
+               if (la_max > 1) {
+//           *** [d|s] ***
+                  f3 = f2*s[0];
+                  s[4] = rap[0]*s[1] + f3;  //! [dx2|s]
+                  s[5] = rap[0]*s[2] ;      //! [dxy|s]
+                  s[6] = rap[0]*s[3] ;      //! [dxz|s]
+                  s[7] = rap[1]*s[2] + f3 ; //! [dy2|s]
+                  s[8] = rap[1]*s[3] ;      //! [dyz|s]
+                  s[9] = rap[2]*s[3] + f3 ; //! [dz2|s]
+
+
+                  if (la_max > 2) {
+//             *** [f|s] ***
+                     f3 = 2.0*f2;
+                     s[10] = rap[0]*s[4] + f3*s[1] ; //! [fx3 |s]
+                     s[11] = rap[0]*s[5] + f2*s[2] ; //! [fx2y|s]
+                     s[12] = rap[0]*s[6] + f2*s[3] ; //! [fx2z|s]
+                     s[13] = rap[0]*s[7] ;           //! [fxy2|s]
+                     s[14] = rap[0]*s[8] ;           //! [fxyz|s]
+                     s[15] = rap[0]*s[9] ;           //! [fxz2|s]
+                     s[16] = rap[1]*s[7] + f3*s[2] ; //! [fy3 |s]
+                     s[17] = rap[1]*s[8] + f2*s[3] ; //! [fy2z|s]
+                     s[18] = rap[1]*s[9] ;           //! [fyz2|s]
+                     s[19] = rap[2]*s[9] + f3*s[3] ; //! [fz3 |s]
+
+                     if (la_max > 3) {
+//               *** [g|s] ***
+                        f4 = 3.0*f2;
+                        s[20] = rap[0]*s[10] + f4*s[4] ; //! [gx4  |s]
+                        s[21] = rap[0]*s[11] + f3*s[5] ; //! [gx3y |s]
+                        s[22] = rap[0]*s[12] + f3*s[6] ; //! [gx3z |s]
+                        s[23] = rap[0]*s[13] + f2*s[7] ; //! [gx2y2|s]
+                        s[24] = rap[0]*s[14] + f2*s[8] ; //! [gx2yz|s]
+                        s[25] = rap[0]*s[15] + f2*s[9] ; //! [gx2z2|s]
+                        s[26] = rap[0]*s[16] ;           //! [gxy3 |s]
+                        s[27] = rap[0]*s[17] ;           //! [gxy2z|s]
+                        s[28] = rap[0]*s[18] ;           //! [gxyz2|s]
+                        s[29] = rap[0]*s[19] ;           //! [gxz3 |s]
+                        s[30] = rap[1]*s[16] + f4*s[7] ; //! [gy4  |s]
+                        s[31] = rap[1]*s[17] + f3*s[8] ; //! [gy3z |s]
+                        s[32] = rap[1]*s[18] + f2*s[9] ; //! [gy2z2|s]
+                        s[33] = rap[1]*s[19] ;           //! [gyz3 |s]
+                        s[34] = rap[2]*s[19] + f4*s[9] ; //! [gz4  |s]
+
+//               *** [a|s] = (Pi - Ai)*[a-1i|s] + f2*Ni(a-1i)*[a-2i|s] ***
+                        for ( int la = 5; la <= la_max ; la++) { // DO la = 5, la_max
+
+//                 *** Increase the angular momentum component z of a ***
+                           s[coset(0, 0, la)] = rap[2]*s[coset(0, 0, la - 1)] + f2*(la - 1)*s[coset(0, 0, la - 2)];
+
+//                 *** Increase the angular momentum component y of a ***
+                           int az = la - 1;
+                           s[coset(0, 1, az)] = rap[1]*s[coset(0, 0, az)] ;
+                           for ( int ay = 2 ; ay <= la ; ay++ ){ // DO ay = 2, la
+                              az = la - ay ;
+                              s[coset(0, ay, az)] = rap[1]*s[coset(0, ay - 1, az)] + f2*(ay - 1)*s[coset(0, ay - 2, az)];
+                           } // END DO
+
+//                 *** Increase the angular momentum component x of a ***
+                           for ( int ay=0 ; ay <= la-1 ; ay++ ){ // DO ay = 0, la - 1
+                              az = la - 1 - ay ;
+                              s[coset(1, ay, az)] = rap[0]*s[coset(0, ay, az)];
+                           } // END DO
+                           for ( int ax=2 ; ax <= la ; ax++ ) { // DO ax = 2, la
+                              f3 = f2*(ax - 1) ;
+                              for (int ay=0; ay <= la-ax ; ay++ ) { // DO ay = 0, la - ax
+                                 az = la - ax - ay ;
+                                 s[coset(ax, ay, az)] = rap[0]*s[coset(ax - 1, ay, az)] + f3*s[coset(ax - 2, ay, az)] ;
+                              } // END DO
+                           } // END DO
+                        } // END DO la = 5, la_max
+                     } // END IF la_max > 3
+                  } // END IF la_max > 2
+               } // END IF la_max > 1
+
+//         *** Recurrence steps: [a|s] -> [a|b] ***
+
+               if (lb_max > 0) {
+
+// !           *** Horizontal recurrence steps ***
+
+                  rbp[0] = rap[0] - rab_x ;
+                  rbp[1] = rap[1] - rab_y ;
+                  rbp[2] = rap[2] - rab_z ;
+
+// !           *** [a|p] = [a+1i|s] - (Bi - Ai)*[a|s] ***
+                  int la_start = 0;
+
+                  for ( int la=la_start ; la <= (la_max-1); la++) { // DO la = la_start, la_max - 1
+                     for( int ax=0; ax <= la; ax++ ){ // DO ax = 0, la
+                        for( int ay=0; ay <= (la-ax); ay++ ){ // DO ay = 0, la - ax
+                           int az = la - ax - ay ;
+                           int coa = coset(ax, ay, az) ;
+                           int coapx = coset(ax + 1, ay, az) ;
+                           int coapy = coset(ax, ay + 1, az) ;
+                           int coapz = coset(ax, ay, az + 1) ;
+                           s[1*Na+ coa] = s[coapx] - rab_x*s[coa] ;
+                           s[2*Na+ coa] = s[coapy] - rab_y*s[coa] ;
+                           s[3*Na+ coa] = s[coapz] - rab_z*s[coa] ;
+                        }
+                     }
+                  }
+
+// !           *** Vertical recurrence step ***
+
+// !           *** [a|p] = (Pi - Bi)*[a|s] + f2*Ni(a)*[a-1i|s] ***
+
+                  for ( int ax=0; ax <= la_max; ax++ ){ // DO ax = 0, la_max
+                     REAL_T fax = f2*ax ;
+                     for ( int ay=0; ay <= la_max-ax ; ay++ ){ // DO ay = 0, la_max - ax
+                        REAL_T fay = f2*ay;
+                        int az = la_max - ax - ay;
+                        REAL_T faz = f2*az;
+                        int coa = coset(ax, ay, az);
+                        int coamx = coset(ax - 1, ay, az);
+                        int coamy = coset(ax, ay - 1, az);
+                        int coamz = coset(ax, ay, az - 1);
+                        s[1*Na+ coa] = rbp[0]*s[coa] + fax*s[coamx];
+                        s[2*Na+ coa] = rbp[1]*s[coa] + fay*s[coamy];
+                        s[3*Na+ coa] = rbp[2]*s[coa] + faz*s[coamz];
+
+                     }
+                  }
+
+// !           *** Recurrence steps: [a|p] -> [a|b] ***
+
+                  for ( int lb=2; lb <= lb_max ; lb++ ){ // DO lb = 2, lb_max
+
+// !             *** Horizontal recurrence steps ***
+
+// !             *** [a|b] = [a+1i|b-1i] - (Bi - Ai)*[a|b-1i] ***
+
+                     la_start = 0;
+                     for( int la=la_start; la <= la_max-1; la++) { // DO la = la_start, la_max - 1
+                        for( int ax=0; ax <= la; ax++ ){ // DO ax = 0, la
+                           for( int ay=0; ay <= la-ax; ay++ ){
+                              int az = la - ax - ay;
+                              int coa = coset(ax, ay, az);
+                              int coapx = coset(ax + 1, ay, az);
+                              int coapy = coset(ax, ay + 1, az);
+                              int coapz = coset(ax, ay, az + 1);
+
+// !                   *** Shift of angular momentum component z from a to b ***
+
+                              int cob = coset(0, 0, lb);
+                              int cobmz = coset(0, 0, lb - 1);
+                              s[cob*Na+ coa] = s[cobmz*Na+ coapz] - rab_z*s[cobmz*Na+ coa];
+
+// !                   *** Shift of angular momentum component y from a to b ***
+
+                              for ( int by=1; by < lb; by++){ // DO by = 1, lb
+                                 int bz = lb - by;
+                                 int cob = coset(0, by, bz);
+                                 int cobmy = coset(0, by - 1, bz);
+                                 s[cob*Na+ coa] = s[cobmy*Na+ coapy] - rab_y*s[cobmy*Na+ coa];
+                              }
+
+// !                   *** Shift of angular momentum component x from a to b ***
+
+                              for ( int bx=1; bx <= lb; bx++){ // DO bx = 1, lb
+                                 for( int by=0; by <= lb-bx; by++) { // DO by = 0, lb - bx
+                                    int bz = lb - bx - by;
+                                    int cob = coset(bx, by, bz);
+                                    int cobmx = coset(bx - 1, by, bz);
+                                    s[cob*Na+ coa] = s[cobmx*Na+ coapx] - rab_x*s[cobmx*Na+ coa];
+                                 }
+                              }
+
+                           }
+                        }
+                     }
+
+// !             *** Vertical recurrence step ***
+
+// !             *** [a|b] = (Pi - Bi)*[a|b-1i] + f2*Ni(a)*[a-1i|b-1i] + ***
+// !             ***         f2*Ni(b-1i)*[a|b-2i]                        ***
+
+                     for( int ax=0; ax <= la_max; ax++ ){ // DO ax = 0, la_max
+                        REAL_T fax = f2*ax;
+                        for( int ay=0; ay<=la_max-ax; ay++){ // DO ay = 0, la_max - ax
+                           REAL_T fay = f2*ay;
+                           int az = la_max - ax - ay;
+                           REAL_T faz = f2*az;
+                           int coa = coset(ax, ay, az);
+                           int coamx = coset(ax - 1, ay, az);
+                           int coamy = coset(ax, ay - 1, az);
+                           int coamz = coset(ax, ay, az - 1);
+
+// !                 *** Increase the angular momentum component z of b ***
+
+                           REAL_T f3 = f2*(lb - 1);
+                           int cob = coset(0, 0, lb);
+                           int cobmz = coset(0, 0, lb - 1);
+                           int cobm2z = coset(0, 0, lb - 2);
+                           s[cob*Na+ coa] = rbp[2]*s[cobmz*Na+ coa] + faz*s[cobmz*Na+ coamz] + f3*s[cobm2z*Na+ coa];
+
+// !                 *** Increase the angular momentum component y of b ***
+
+                           int bz = lb - 1;
+                           cob = coset(0, 1, bz);
+                           int cobmy = coset(0, 0, bz);
+                           s[cob*Na+ coa] = rbp[1]*s[cobmy*Na+ coa] + fay*s[cobmy*Na+ coamy];
+
+                           for( int by=2; by <= lb; by++) { // DO by = 2, lb
+                              int bz = lb - by;
+                              REAL_T f3 = f2*(by - 1);
+                              cob = coset(0, by, bz);
+                              cobmy = coset(0, by - 1, bz);
+                              int cobm2y = coset(0, by - 2, bz);
+                              s[cob*Na+ coa] = rbp[1]*s[cobmy*Na+ coa] + fay*s[cobmy*Na+ coamy] + f3*s[cobm2y*Na+ coa];
+                           }
+
+// !                 *** Increase the angular momentum component x of b ***
+
+                           for( int by=0; by <= lb-1; by++ ){ // DO by = 0, lb - 1
+                              bz = lb - 1 - by;
+                              cob = coset(1, by, bz);
+                              int cobmx = coset(0, by, bz);
+                              s[cob*Na+ coa] = rbp[0]*s[cobmx*Na+ coa] + fax*s[cobmx*Na+ coamx];
+                           }
+
+                           for ( int bx=2; bx <= lb; bx++ ){ // DO bx = 2, lb
+                              REAL_T f3 = f2*(bx - 1);
+                              for( int by=0; by <= lb-bx; by++) { // DO by = 0, lb - bx
+                                 bz = lb - bx - by;
+                                 cob = coset(bx, by, bz);
+                                 int cobmx = coset(bx - 1, by, bz);
+                                 int cobm2x = coset(bx - 2, by, bz);
+                                 s[cob*Na+ coa] = rbp[0]*s[cobmx*Na+ coa] + fax*s[cobmx*Na+ coamx] + f3*s[cobm2x*Na+ coa];
+                              }
+                           }
+                        } // for( int ay=0; ay<=la_max-ax; ay++)
+                     } // for( int ax=0; ax <= la_max; ax++ )
+                  }//for ( int lb=2; lb <= lb_max ; lb++ ){
+               } // END if (lb_max > 0) {
+            } else { // this is the else in 'if (la_max > 0) { } else {}'
+
+               if( lb_max>0) { // IF (lb_max > 0) THEN
+
+// !           *** Vertical recurrence steps: [s|s] -> [s|b] ***
+
+                  rbp[0] = (f1 - 1.0)*rab_x;
+                  rbp[1] = (f1 - 1.0)*rab_y;
+                  rbp[2] = (f1 - 1.0)*rab_z;
+
+// !           *** [s|p] = (Pi - Bi)*[s|s] ***
+
+                  s[1*Na+0] = rbp[0]*s[0]; // ! [s|px]
+                  s[2*Na+0] = rbp[1]*s[0]; // ! [s|py]
+                  s[3*Na+0] = rbp[2]*s[0]; // ! [s|pz]
+
+                  if (lb_max > 1) {
+
+// !             *** [s|d] ***
+
+                     f3 = f2*s[0];
+
+                     s[4*Na+0] = rbp[0]*s[1*Na+0] + f3; // ! [s|dx2]
+                     s[5*Na+0] = rbp[0]*s[2*Na+0]; // ! [s|dxy]
+                     s[6*Na+0] = rbp[0]*s[3*Na+0]; // ! [s|dxz]
+                     s[7*Na+0] = rbp[1]*s[2*Na+0] + f3; // ! [s|dy2]
+                     s[8*Na+0] = rbp[1]*s[3*Na+0]; // ! [s|dyz]
+                     s[9*Na+0] = rbp[2]*s[3*Na+0] + f3; // ! [s|dz2]
+
+// !             *** [s|b] = (Pi - Bi)*[s|b-1i] + f2*Ni(b-1i)*[s|b-2i] ***
+
+                     for( int lb=3; lb <= lb_max; lb++ ){ // DO lb = 3, lb_max
+
+// !               *** Increase the angular momentum component z of b ***
+
+                        s[coset(0, 0, lb)*Na+ 0] = rbp[2]*s[coset(0, 0, lb - 1)*Na+ 0] + f2*(lb - 1)*s[coset(0, 0, lb - 2)*Na+ 0];
+
+// !               *** Increase the angular momentum component y of b ***
+
+                        int bz = lb - 1;
+                        s[coset(0, 1, bz)*Na+ 0] = rbp[1]*s[coset(0, 0, bz)*Na+ 0];
+                        for( int by=2; by <= lb; lb++ ){ // DO by = 2, lb
+                           bz = lb - by;
+                           s[coset(0, by, bz)*Na+ 0] = rbp[1]*s[coset(0, by - 1, bz)*Na+ 0] + f2*(by - 1)*s[coset(0, by - 2, bz)*Na+ 0];
+                        }
+
+// !               *** Increase the angular momentum component x of b ***
+
+                        for( int by=0; by <= lb-1; by++ ){ // DO by = 0, lb - 1
+                           bz = lb - 1 - by;
+                           s[coset(1, by, bz)*Na+ 0] = rbp[0]*s[coset(0, by, bz)*Na+ 0];
+                        }
+                        for( int bx=2; bx <= lb; bx++ ){ // DO bx = 2, lb
+                           f3 = f2*(bx - 1);
+                           for( int by=0; by <= lb-bx; by++){ // DO by = 0, lb - bx
+                              bz = lb - bx - by;
+                              s[coset(bx, by, bz)*Na+ 0] = rbp[0]*s[coset(bx - 1, by, bz)*Na+ 0] + f3*s[coset(bx - 2, by, bz)*Na+ 0];
+                           }
+                        }
+
+                     } // for( int lb=3; lb <= lb_max; lb++ ){
+
+                  } // if (lb_max > 1)
+
+               } // if( lb_max>0) {
+
+            } // if (la_max > 0) { } else {}
+
+
+  	
+
+
+}
+
 
 __host__ __device__ inline unsigned int get_nco(int l)
 {
@@ -292,7 +645,9 @@ __global__ void compute_s_gpu_kernel ( int* list_ijd_dev, int* bas_dev, double* 
       double rab_x = ra_x - rb_x;
       double rab_y = ra_y - rb_y;
       double rab_z = ra_z - rb_z;
+//      double sab_pgf_spher[9]; // nsoa*nsob]; // if L = 6, this is ((2*6+1)**2 = 169 doubles per thread. Also, this needs to be constant ( at compile time ?)
       double sab_pgf[9]; // ncoa*ncob]; // if L = 6, this is ((6+1)*(6+2)/2)**2 = 784 doubles per thread. Not great. Also, this needs to be constant ( at compile time ?)
+      double s[16]; // ncoseta*ncosetb]; // if L = 6, this is [sum from 1 to 6 of ((l+1)*(l+2)/2)]**2 = 7056 doubles per thread. Not great. At all. Also, this needs to be constant ( at compile time ?)
       double cSc_ab;
       sab_pgf[0] = 0.0 ;
       sab_pgf[1] = 0.0 ;
@@ -306,7 +661,7 @@ __global__ void compute_s_gpu_kernel ( int* list_ijd_dev, int* bas_dev, double* 
 
       //
       // Compute the gaussian integrals and saves them in sab_pgf
-      if (la == 0 && lb == 0) {
+/*      if (la == 0 && lb == 0) {
          overlap_primitive_ss(&sab_pgf[0], zet_a, zet_b, rab_x, rab_y, rab_z);
       } else if (la == 0 && lb == 1) {
          overlap_primitive_sp(sab_pgf, zet_a, zet_b, rab_x, rab_y, rab_z);
@@ -315,6 +670,34 @@ __global__ void compute_s_gpu_kernel ( int* list_ijd_dev, int* bas_dev, double* 
       } else if (la == 1 && lb == 1) {
          overlap_primitive_pp(sab_pgf, zet_a, zet_b, rab_x, rab_y, rab_z);
       }
+*/
+
+      overlap( s, zet_a, zet_b, rab_x, rab_y, rab_z, la, lb );
+
+      if (la == 0 && lb == 0) {
+         sab_pgf[0] = s[0];
+      } else if (la == 0 && lb == 1) {
+         sab_pgf[0] = s[1];
+         sab_pgf[1] = s[2];
+         sab_pgf[2] = s[3];
+      } else if (la == 1 && lb == 0) {
+         sab_pgf[0] = s[1];
+         sab_pgf[1] = s[2];
+         sab_pgf[2] = s[3];
+      } else if (la == 1 && lb == 1) {
+         sab_pgf[0] = s[5];
+         sab_pgf[1] = s[6];
+         sab_pgf[2] = s[7];
+         sab_pgf[3] = s[9];
+         sab_pgf[4] = s[10];
+         sab_pgf[5] = s[11];
+         sab_pgf[6] = s[13];
+         sab_pgf[7] = s[14];
+         sab_pgf[8] = s[15];
+      }
+//      printf("BlockIdx %d ThreadIdx %d ThreadIdy %d s_offset %d la %d lb %d  %e %e %e %e %e %e %e %e %e \n ", 
+//              blockIdx.x, threadIdx.x, threadIdx.y, s_offset,   la,   lb,
+//              sab_pgf[0],sab_pgf[1],sab_pgf[2],sab_pgf[3],sab_pgf[4],sab_pgf[5],sab_pgf[6],sab_pgf[7],sab_pgf[8]);
 
       // Contract the gaussian integrals to the different products between basis set functions
       for (unsigned int icob = 0; icob < ncob; ++icob) {
