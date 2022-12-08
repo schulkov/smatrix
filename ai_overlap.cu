@@ -6,12 +6,6 @@
 #include <string.h>
 #include <stdio.h>
 
-
-#define MATH_PI 
-/* a way to switch precision : single <-> double */
-typedef double REAL_T;
-
-
 #define GPU_ERROR_CHECK(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
@@ -29,76 +23,76 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
     https://github.com/cp2k/cp2k/blob/master/src/aobasis/ai_overlap.F
 */
 
-__host__ __device__ void overlap_primitive_ss(REAL_T *sab, REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
+__host__ __device__ void overlap_primitive_ss(double *sab, double zeta, double zetb, double rab_x, double rab_y, double rab_z)
 {
-   REAL_T dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
+   double dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
 
    //  *** Prefactors ***
-   REAL_T zetp = ((REAL_T)1.0)/(zeta+zetb);
-   REAL_T pi_zetp = M_PI * zetp;
-   REAL_T f0 = pi_zetp*sqrt(pi_zetp);
-   REAL_T f1 = zetb*zetp;
+   double zetp = ((double)1.0)/(zeta+zetb);
+   double pi_zetp = M_PI * zetp;
+   double f0 = pi_zetp*sqrt(pi_zetp);
+   double f1 = zetb*zetp;
 
    *sab = f0*exp(-zeta*f1*dab*dab);
 }
 
-__host__ __device__ void overlap_primitive_sp(REAL_T *sab, REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
+__host__ __device__ void overlap_primitive_sp(double *sab, double zeta, double zetb, double rab_x, double rab_y, double rab_z)
 {
-   REAL_T dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
+   double dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
 
    //  *** Prefactors ***
-   REAL_T zetp = ((REAL_T)1.0)/(zeta+zetb);
-   REAL_T pi_zetp = M_PI * zetp;
-   REAL_T f0 = sqrt(pi_zetp*pi_zetp*pi_zetp);
-   REAL_T f1 = zetb*zetp;
-   REAL_T f1_m1 = f1 - (REAL_T)1.0;
-   REAL_T rbp_x = f1_m1*rab_x;
-   REAL_T rbp_y = f1_m1*rab_y;
-   REAL_T rbp_z = f1_m1*rab_z;
+   double zetp = ((double)1.0)/(zeta+zetb);
+   double pi_zetp = M_PI * zetp;
+   double f0 = sqrt(pi_zetp*pi_zetp*pi_zetp);
+   double f1 = zetb*zetp;
+   double f1_m1 = f1 - (double)1.0;
+   double rbp_x = f1_m1*rab_x;
+   double rbp_y = f1_m1*rab_y;
+   double rbp_z = f1_m1*rab_z;
 
-   REAL_T s0 = f0*exp(-zeta*f1*dab*dab); // [s|s]
+   double s0 = f0*exp(-zeta*f1*dab*dab); // [s|s]
    sab[0] = rbp_x*s0; // [s|px]
    sab[1] = rbp_y*s0; // [s|py]
    sab[2] = rbp_z*s0; // [s|pz]
 }
 
 /* the same as overlap_primitive_sp(sab, zetb, zeta, rab_x, rab_y, rab_z) due to symmetry */
-__host__ __device__ void overlap_primitive_ps(REAL_T *sab, REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
+__host__ __device__ void overlap_primitive_ps(double *sab, double zeta, double zetb, double rab_x, double rab_y, double rab_z)
 {
-   REAL_T dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
+   double dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
 
    //  *** Prefactors ***
-   REAL_T zetp = ((REAL_T)1.0)/(zeta+zetb);
-   REAL_T pi_zetp = M_PI * zetp;
-   REAL_T f0 = sqrt(pi_zetp*pi_zetp*pi_zetp);
-   REAL_T f1 = zetb*zetp;
-   REAL_T rap_x = f1*rab_x;
-   REAL_T rap_y = f1*rab_y;
-   REAL_T rap_z = f1*rab_z;
+   double zetp = ((double)1.0)/(zeta+zetb);
+   double pi_zetp = M_PI * zetp;
+   double f0 = sqrt(pi_zetp*pi_zetp*pi_zetp);
+   double f1 = zetb*zetp;
+   double rap_x = f1*rab_x;
+   double rap_y = f1*rab_y;
+   double rap_z = f1*rab_z;
 
-   REAL_T s0 = f0*exp(-zeta*f1*dab*dab); // [s|s]
+   double s0 = f0*exp(-zeta*f1*dab*dab); // [s|s]
    sab[0] = rap_x*s0; // [px|s]
    sab[1] = rap_y*s0; // [py|s]
    sab[2] = rap_z*s0; // [pz|s]
 }
 
-__host__ __device__ void overlap_primitive_pp(REAL_T *sab, REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
+__host__ __device__ void overlap_primitive_pp(double *sab, double zeta, double zetb, double rab_x, double rab_y, double rab_z)
 {
-   REAL_T dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
+   double dab = sqrt(rab_x*rab_x + rab_y*rab_y + rab_z*rab_z);
 
    //  *** Prefactors ***
-   REAL_T zetp = ((REAL_T)1.0)/(zeta+zetb);
-   REAL_T pi_zetp = M_PI * zetp;
-   REAL_T f0 = sqrt(pi_zetp*pi_zetp*pi_zetp);
-   REAL_T f1 = zetb*zetp;
-   REAL_T f2 = ((REAL_T)0.5)*zetp;
-   REAL_T rap_x = f1*rab_x;
-   REAL_T rap_y = f1*rab_y;
-   REAL_T rap_z = f1*rab_z;
-   REAL_T rbp_x = rap_x-rab_x;
-   REAL_T rbp_y = rap_y-rab_y;
-   REAL_T rbp_z = rap_z-rab_z;
-   REAL_T s0, s1;
+   double zetp = ((double)1.0)/(zeta+zetb);
+   double pi_zetp = M_PI * zetp;
+   double f0 = sqrt(pi_zetp*pi_zetp*pi_zetp);
+   double f1 = zetb*zetp;
+   double f2 = ((double)0.5)*zetp;
+   double rap_x = f1*rab_x;
+   double rap_y = f1*rab_y;
+   double rap_z = f1*rab_z;
+   double rbp_x = rap_x-rab_x;
+   double rbp_y = rap_y-rab_y;
+   double rbp_z = rap_z-rab_z;
+   double s0, s1;
 
    s0 = f0*exp(-zeta*f1*dab*dab); // [s|s]
 
@@ -118,374 +112,16 @@ __host__ __device__ void overlap_primitive_pp(REAL_T *sab, REAL_T zeta, REAL_T z
    sab[8] = rbp_z*s1+f2*s0; // [pz|pz]
 }
 
-__host__ __device__ int ncoset( int l_max ){
-  int nco = 0;
-  for( int l=0; l <= l_max; l++ ){
-    nco += (l+1)*(l+2)/2;
-  }
-  return nco;
-}
-
-__host__ __device__ int coset( int lx, int ly, int lz ){
-  int l = lx + ly + lz;
-  int co = 1 + (l - lx)*(l - lx + 1)/2 + lz;
-  return ncoset(l - 1) + co - 1 ;
-}
-
-__host__ __device__ void overlap( REAL_T *s , REAL_T zeta, REAL_T zetb, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z, int la_max, int lb_max){
-//       *** Calculate some prefactors ***
-            REAL_T zetp = 1.0/(zeta + zetb);
-            REAL_T f0 = sqrt((M_PI*zetp)*(M_PI*zetp)*(M_PI*zetp));
-            REAL_T f1 = zetb*zetp;
-            REAL_T f2 = 0.5*zetp;
-            REAL_T f3, f4;
-            REAL_T rap[3];
-            REAL_T rbp[3];
-            REAL_T dab = sqrt( rab_x*rab_x + rab_y*rab_y + rab_z*rab_z );
-
-            int Na = ncoset(la_max);
-
-//       *** Calculate the basic two-center overlap integral [s|s] ***
-            s[0] = f0*exp(-zeta*f1*dab*dab); //! [s|s]
-//       *** Recurrence steps: [s|s] -> [a|b] ***
-            if (la_max > 0) {
-//         *** Vertical recurrence steps: [s|s] -> [a|s] ***
-               rap[0] = f1*rab_x ; 
-               rap[1] = f1*rab_y ; 
-               rap[2] = f1*rab_z ; 
-//         *** [p|s] = (Pi - Ai)*[s|s]  (i = x,y,z) ***
-               s[1] = rap[0]*s[0]; //! [px|s]
-               s[2] = rap[1]*s[0]; //! [py|s]
-               s[3] = rap[2]*s[0]; //! [pz|s]
-
-               if (la_max > 1) {
-//           *** [d|s] ***
-                  f3 = f2*s[0];
-                  s[4] = rap[0]*s[1] + f3;  //! [dx2|s]
-                  s[5] = rap[0]*s[2] ;      //! [dxy|s]
-                  s[6] = rap[0]*s[3] ;      //! [dxz|s]
-                  s[7] = rap[1]*s[2] + f3 ; //! [dy2|s]
-                  s[8] = rap[1]*s[3] ;      //! [dyz|s]
-                  s[9] = rap[2]*s[3] + f3 ; //! [dz2|s]
-
-
-                  if (la_max > 2) {
-//             *** [f|s] ***
-                     f3 = 2.0*f2;
-                     s[10] = rap[0]*s[4] + f3*s[1] ; //! [fx3 |s]
-                     s[11] = rap[0]*s[5] + f2*s[2] ; //! [fx2y|s]
-                     s[12] = rap[0]*s[6] + f2*s[3] ; //! [fx2z|s]
-                     s[13] = rap[0]*s[7] ;           //! [fxy2|s]
-                     s[14] = rap[0]*s[8] ;           //! [fxyz|s]
-                     s[15] = rap[0]*s[9] ;           //! [fxz2|s]
-                     s[16] = rap[1]*s[7] + f3*s[2] ; //! [fy3 |s]
-                     s[17] = rap[1]*s[8] + f2*s[3] ; //! [fy2z|s]
-                     s[18] = rap[1]*s[9] ;           //! [fyz2|s]
-                     s[19] = rap[2]*s[9] + f3*s[3] ; //! [fz3 |s]
-
-                     if (la_max > 3) {
-//               *** [g|s] ***
-                        f4 = 3.0*f2;
-                        s[20] = rap[0]*s[10] + f4*s[4] ; //! [gx4  |s]
-                        s[21] = rap[0]*s[11] + f3*s[5] ; //! [gx3y |s]
-                        s[22] = rap[0]*s[12] + f3*s[6] ; //! [gx3z |s]
-                        s[23] = rap[0]*s[13] + f2*s[7] ; //! [gx2y2|s]
-                        s[24] = rap[0]*s[14] + f2*s[8] ; //! [gx2yz|s]
-                        s[25] = rap[0]*s[15] + f2*s[9] ; //! [gx2z2|s]
-                        s[26] = rap[0]*s[16] ;           //! [gxy3 |s]
-                        s[27] = rap[0]*s[17] ;           //! [gxy2z|s]
-                        s[28] = rap[0]*s[18] ;           //! [gxyz2|s]
-                        s[29] = rap[0]*s[19] ;           //! [gxz3 |s]
-                        s[30] = rap[1]*s[16] + f4*s[7] ; //! [gy4  |s]
-                        s[31] = rap[1]*s[17] + f3*s[8] ; //! [gy3z |s]
-                        s[32] = rap[1]*s[18] + f2*s[9] ; //! [gy2z2|s]
-                        s[33] = rap[1]*s[19] ;           //! [gyz3 |s]
-                        s[34] = rap[2]*s[19] + f4*s[9] ; //! [gz4  |s]
-
-//               *** [a|s] = (Pi - Ai)*[a-1i|s] + f2*Ni(a-1i)*[a-2i|s] ***
-                        for ( int la = 5; la <= la_max ; la++) { // DO la = 5, la_max
-
-//                 *** Increase the angular momentum component z of a ***
-                           s[coset(0, 0, la)] = rap[2]*s[coset(0, 0, la - 1)] + f2*(la - 1)*s[coset(0, 0, la - 2)];
-
-//                 *** Increase the angular momentum component y of a ***
-                           int az = la - 1;
-                           s[coset(0, 1, az)] = rap[1]*s[coset(0, 0, az)] ;
-                           for ( int ay = 2 ; ay <= la ; ay++ ){ // DO ay = 2, la
-                              az = la - ay ;
-                              s[coset(0, ay, az)] = rap[1]*s[coset(0, ay - 1, az)] + f2*(ay - 1)*s[coset(0, ay - 2, az)];
-                           } // END DO
-
-//                 *** Increase the angular momentum component x of a ***
-                           for ( int ay=0 ; ay <= la-1 ; ay++ ){ // DO ay = 0, la - 1
-                              az = la - 1 - ay ;
-                              s[coset(1, ay, az)] = rap[0]*s[coset(0, ay, az)];
-                           } // END DO
-                           for ( int ax=2 ; ax <= la ; ax++ ) { // DO ax = 2, la
-                              f3 = f2*(ax - 1) ;
-                              for (int ay=0; ay <= la-ax ; ay++ ) { // DO ay = 0, la - ax
-                                 az = la - ax - ay ;
-                                 s[coset(ax, ay, az)] = rap[0]*s[coset(ax - 1, ay, az)] + f3*s[coset(ax - 2, ay, az)] ;
-                              } // END DO
-                           } // END DO
-                        } // END DO la = 5, la_max
-                     } // END IF la_max > 3
-                  } // END IF la_max > 2
-               } // END IF la_max > 1
-
-//         *** Recurrence steps: [a|s] -> [a|b] ***
-
-               if (lb_max > 0) {
-
-// !           *** Horizontal recurrence steps ***
-
-                  rbp[0] = rap[0] - rab_x ;
-                  rbp[1] = rap[1] - rab_y ;
-                  rbp[2] = rap[2] - rab_z ;
-
-// !           *** [a|p] = [a+1i|s] - (Bi - Ai)*[a|s] ***
-                  int la_start = 0;
-
-                  for ( int la=la_start ; la <= (la_max-1); la++) { // DO la = la_start, la_max - 1
-                     for( int ax=0; ax <= la; ax++ ){ // DO ax = 0, la
-                        for( int ay=0; ay <= (la-ax); ay++ ){ // DO ay = 0, la - ax
-                           int az = la - ax - ay ;
-                           int coa = coset(ax, ay, az) ;
-                           int coapx = coset(ax + 1, ay, az) ;
-                           int coapy = coset(ax, ay + 1, az) ;
-                           int coapz = coset(ax, ay, az + 1) ;
-                           s[1*Na+ coa] = s[coapx] - rab_x*s[coa] ;
-                           s[2*Na+ coa] = s[coapy] - rab_y*s[coa] ;
-                           s[3*Na+ coa] = s[coapz] - rab_z*s[coa] ;
-                        }
-                     }
-                  }
-
-// !           *** Vertical recurrence step ***
-
-// !           *** [a|p] = (Pi - Bi)*[a|s] + f2*Ni(a)*[a-1i|s] ***
-
-                  for ( int ax=0; ax <= la_max; ax++ ){ // DO ax = 0, la_max
-                     REAL_T fax = f2*ax ;
-                     for ( int ay=0; ay <= la_max-ax ; ay++ ){ // DO ay = 0, la_max - ax
-                        REAL_T fay = f2*ay;
-                        int az = la_max - ax - ay;
-                        REAL_T faz = f2*az;
-                        int coa = coset(ax, ay, az);
-                        int coamx = coset(ax - 1, ay, az);
-                        int coamy = coset(ax, ay - 1, az);
-                        int coamz = coset(ax, ay, az - 1);
-                        s[1*Na+ coa] = rbp[0]*s[coa] + fax*s[coamx];
-                        s[2*Na+ coa] = rbp[1]*s[coa] + fay*s[coamy];
-                        s[3*Na+ coa] = rbp[2]*s[coa] + faz*s[coamz];
-
-                     }
-                  }
-
-// !           *** Recurrence steps: [a|p] -> [a|b] ***
-
-                  for ( int lb=2; lb <= lb_max ; lb++ ){ // DO lb = 2, lb_max
-
-// !             *** Horizontal recurrence steps ***
-
-// !             *** [a|b] = [a+1i|b-1i] - (Bi - Ai)*[a|b-1i] ***
-
-                     la_start = 0;
-                     for( int la=la_start; la <= la_max-1; la++) { // DO la = la_start, la_max - 1
-                        for( int ax=0; ax <= la; ax++ ){ // DO ax = 0, la
-                           for( int ay=0; ay <= la-ax; ay++ ){
-                              int az = la - ax - ay;
-                              int coa = coset(ax, ay, az);
-                              int coapx = coset(ax + 1, ay, az);
-                              int coapy = coset(ax, ay + 1, az);
-                              int coapz = coset(ax, ay, az + 1);
-
-// !                   *** Shift of angular momentum component z from a to b ***
-
-                              int cob = coset(0, 0, lb);
-                              int cobmz = coset(0, 0, lb - 1);
-                              s[cob*Na+ coa] = s[cobmz*Na+ coapz] - rab_z*s[cobmz*Na+ coa];
-
-// !                   *** Shift of angular momentum component y from a to b ***
-
-                              for ( int by=1; by < lb; by++){ // DO by = 1, lb
-                                 int bz = lb - by;
-                                 int cob = coset(0, by, bz);
-                                 int cobmy = coset(0, by - 1, bz);
-                                 s[cob*Na+ coa] = s[cobmy*Na+ coapy] - rab_y*s[cobmy*Na+ coa];
-                              }
-
-// !                   *** Shift of angular momentum component x from a to b ***
-
-                              for ( int bx=1; bx <= lb; bx++){ // DO bx = 1, lb
-                                 for( int by=0; by <= lb-bx; by++) { // DO by = 0, lb - bx
-                                    int bz = lb - bx - by;
-                                    int cob = coset(bx, by, bz);
-                                    int cobmx = coset(bx - 1, by, bz);
-                                    s[cob*Na+ coa] = s[cobmx*Na+ coapx] - rab_x*s[cobmx*Na+ coa];
-                                 }
-                              }
-
-                           }
-                        }
-                     }
-
-// !             *** Vertical recurrence step ***
-
-// !             *** [a|b] = (Pi - Bi)*[a|b-1i] + f2*Ni(a)*[a-1i|b-1i] + ***
-// !             ***         f2*Ni(b-1i)*[a|b-2i]                        ***
-
-                     for( int ax=0; ax <= la_max; ax++ ){ // DO ax = 0, la_max
-                        REAL_T fax = f2*ax;
-                        for( int ay=0; ay<=la_max-ax; ay++){ // DO ay = 0, la_max - ax
-                           REAL_T fay = f2*ay;
-                           int az = la_max - ax - ay;
-                           REAL_T faz = f2*az;
-                           int coa = coset(ax, ay, az);
-                           int coamx = coset(ax - 1, ay, az);
-                           int coamy = coset(ax, ay - 1, az);
-                           int coamz = coset(ax, ay, az - 1);
-
-// !                 *** Increase the angular momentum component z of b ***
-
-                           REAL_T f3 = f2*(lb - 1);
-                           int cob = coset(0, 0, lb);
-                           int cobmz = coset(0, 0, lb - 1);
-                           int cobm2z = coset(0, 0, lb - 2);
-                           s[cob*Na+ coa] = rbp[2]*s[cobmz*Na+ coa] + faz*s[cobmz*Na+ coamz] + f3*s[cobm2z*Na+ coa];
-
-// !                 *** Increase the angular momentum component y of b ***
-
-                           int bz = lb - 1;
-                           cob = coset(0, 1, bz);
-                           int cobmy = coset(0, 0, bz);
-                           s[cob*Na+ coa] = rbp[1]*s[cobmy*Na+ coa] + fay*s[cobmy*Na+ coamy];
-
-                           for( int by=2; by <= lb; by++) { // DO by = 2, lb
-                              int bz = lb - by;
-                              REAL_T f3 = f2*(by - 1);
-                              cob = coset(0, by, bz);
-                              cobmy = coset(0, by - 1, bz);
-                              int cobm2y = coset(0, by - 2, bz);
-                              s[cob*Na+ coa] = rbp[1]*s[cobmy*Na+ coa] + fay*s[cobmy*Na+ coamy] + f3*s[cobm2y*Na+ coa];
-                           }
-
-// !                 *** Increase the angular momentum component x of b ***
-
-                           for( int by=0; by <= lb-1; by++ ){ // DO by = 0, lb - 1
-                              bz = lb - 1 - by;
-                              cob = coset(1, by, bz);
-                              int cobmx = coset(0, by, bz);
-                              s[cob*Na+ coa] = rbp[0]*s[cobmx*Na+ coa] + fax*s[cobmx*Na+ coamx];
-                           }
-
-                           for ( int bx=2; bx <= lb; bx++ ){ // DO bx = 2, lb
-                              REAL_T f3 = f2*(bx - 1);
-                              for( int by=0; by <= lb-bx; by++) { // DO by = 0, lb - bx
-                                 bz = lb - bx - by;
-                                 cob = coset(bx, by, bz);
-                                 int cobmx = coset(bx - 1, by, bz);
-                                 int cobm2x = coset(bx - 2, by, bz);
-                                 s[cob*Na+ coa] = rbp[0]*s[cobmx*Na+ coa] + fax*s[cobmx*Na+ coamx] + f3*s[cobm2x*Na+ coa];
-                              }
-                           }
-                        } // for( int ay=0; ay<=la_max-ax; ay++)
-                     } // for( int ax=0; ax <= la_max; ax++ )
-                  }//for ( int lb=2; lb <= lb_max ; lb++ ){
-               } // END if (lb_max > 0) {
-            } else { // this is the else in 'if (la_max > 0) { } else {}'
-
-               if( lb_max>0) { // IF (lb_max > 0) THEN
-
-// !           *** Vertical recurrence steps: [s|s] -> [s|b] ***
-
-                  rbp[0] = (f1 - 1.0)*rab_x;
-                  rbp[1] = (f1 - 1.0)*rab_y;
-                  rbp[2] = (f1 - 1.0)*rab_z;
-
-// !           *** [s|p] = (Pi - Bi)*[s|s] ***
-
-                  s[1*Na+0] = rbp[0]*s[0]; // ! [s|px]
-                  s[2*Na+0] = rbp[1]*s[0]; // ! [s|py]
-                  s[3*Na+0] = rbp[2]*s[0]; // ! [s|pz]
-
-                  if (lb_max > 1) {
-
-// !             *** [s|d] ***
-
-                     f3 = f2*s[0];
-
-                     s[4*Na+0] = rbp[0]*s[1*Na+0] + f3; // ! [s|dx2]
-                     s[5*Na+0] = rbp[0]*s[2*Na+0]; // ! [s|dxy]
-                     s[6*Na+0] = rbp[0]*s[3*Na+0]; // ! [s|dxz]
-                     s[7*Na+0] = rbp[1]*s[2*Na+0] + f3; // ! [s|dy2]
-                     s[8*Na+0] = rbp[1]*s[3*Na+0]; // ! [s|dyz]
-                     s[9*Na+0] = rbp[2]*s[3*Na+0] + f3; // ! [s|dz2]
-
-// !             *** [s|b] = (Pi - Bi)*[s|b-1i] + f2*Ni(b-1i)*[s|b-2i] ***
-
-                     for( int lb=3; lb <= lb_max; lb++ ){ // DO lb = 3, lb_max
-
-// !               *** Increase the angular momentum component z of b ***
-
-                        s[coset(0, 0, lb)*Na+ 0] = rbp[2]*s[coset(0, 0, lb - 1)*Na+ 0] + f2*(lb - 1)*s[coset(0, 0, lb - 2)*Na+ 0];
-
-// !               *** Increase the angular momentum component y of b ***
-
-                        int bz = lb - 1;
-                        s[coset(0, 1, bz)*Na+ 0] = rbp[1]*s[coset(0, 0, bz)*Na+ 0];
-                        for( int by=2; by <= lb; lb++ ){ // DO by = 2, lb
-                           bz = lb - by;
-                           s[coset(0, by, bz)*Na+ 0] = rbp[1]*s[coset(0, by - 1, bz)*Na+ 0] + f2*(by - 1)*s[coset(0, by - 2, bz)*Na+ 0];
-                        }
-
-// !               *** Increase the angular momentum component x of b ***
-
-                        for( int by=0; by <= lb-1; by++ ){ // DO by = 0, lb - 1
-                           bz = lb - 1 - by;
-                           s[coset(1, by, bz)*Na+ 0] = rbp[0]*s[coset(0, by, bz)*Na+ 0];
-                        }
-                        for( int bx=2; bx <= lb; bx++ ){ // DO bx = 2, lb
-                           f3 = f2*(bx - 1);
-                           for( int by=0; by <= lb-bx; by++){ // DO by = 0, lb - bx
-                              bz = lb - bx - by;
-                              s[coset(bx, by, bz)*Na+ 0] = rbp[0]*s[coset(bx - 1, by, bz)*Na+ 0] + f3*s[coset(bx - 2, by, bz)*Na+ 0];
-                           }
-                        }
-
-                     } // for( int lb=3; lb <= lb_max; lb++ ){
-
-                  } // if (lb_max > 1)
-
-               } // if( lb_max>0) {
-
-            } // if (la_max > 0) { } else {}
-
-
-  	
-
-
-}
-
-
-__host__ __device__ inline unsigned int get_nco(int l)
-{
-   unsigned int nco = 0;
-
-   if (l >= 0) nco = (l+1)*(l+2)/2;
-   return nco;
-}
-
 
 __global__ void overlap_ab_cgf_kernel(
-    REAL_T* sab_dev, REAL_T* sab_pgf_dev, REAL_T* gcc_a_dev, REAL_T* gcc_b_dev, REAL_T* zet_a_dev, REAL_T* zet_b_dev,
-    int la_set, int lb_set, unsigned int ncoa, unsigned int ncob, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z )
+    double* sab_dev, double* sab_pgf_dev, double* gcc_a_dev, double* gcc_b_dev, double* zet_a_dev, double* zet_b_dev,
+    int la_set, int lb_set, unsigned int ncoa, unsigned int ncob, double rab_x, double rab_y, double rab_z )
 {
    unsigned int ipgf_a = threadIdx.x ;
    unsigned int ipgf_b = threadIdx.y ;
    int npgf_a = blockDim.x;
    int npgf_b = blockDim.y;
-   REAL_T gccSgcc_ab;
+   double gccSgcc_ab;
    /*
       For each pair of primitives ipgf_a,ipgf_b, fill S_ab_pgf with the correct polynomial[r,e-mr2]
       Once that is done, accumulate the S_ab = <c_a|S_ab_pgf|c_b> on the ncoa,ncob matrix
@@ -513,8 +149,230 @@ __global__ void overlap_ab_cgf_kernel(
 }
 
 
+__host__ __device__ int ncoset( int l_max ){
+  int nco = 0;
+  for( int l=0; l <= l_max; l++ ){
+    nco += (l+1)*(l+2)/2;
+  }
+  return nco;
+}
+
+__host__ __device__ int coset( int lx, int ly, int lz ){
+  int l = lx + ly + lz;
+  int co = 1 + (l - lx)*(l - lx + 1)/2 + lz;
+  return ncoset(l - 1) + co - 1 ;
+}
+
+__host__ __device__ inline unsigned int get_nco(int l){
+   unsigned int nco = 0;
+   if (l >= 0) nco = (l+1)*(l+2)/2;
+   return nco;
+}
+
+__host__ __device__ void os_rr_ovlp( double rap[3], int la_max, double rbp[3], int lb_max, double zet, int ldrr, double* rr ){
+   // uses the Obara-Saika Recurrence Relations to compute integrals of the type 
+   // (x-Ax)^La (x-Bx)^Lb exp(-zeta(r-A)**2) exp(-zetb(r-B)**2)
+   // usually, these integrals are then used to compute the (r-A) integrals
+   // and their derivatives using separation of variables
+   double g = 0.5/zet;
+   // s integrals
+   rr[0] = 1.0;
+   rr[1] = 1.0;
+   rr[2] = 1.0;
+   //!
+   //! recursion along la for lb=0
+   //!
+   if (la_max > 0) {
+      // <p|s> = (p-a) <s|s> . Ref OS table VI line 2
+      rr[ldrr*3+0] = rap[0];
+      rr[ldrr*3+1] = rap[1];
+      rr[ldrr*3+2] = rap[2];
+      //!
+      for( int la = 1; la < la_max ; la++ ){ // DO la = 1, la_max - 1
+         int lap1 = la + 1;
+         int lam1 = la - 1;
+         // <a+1|s> = 1/2z N(a) <a-1|s> + (p-a) <a|b> . Ref OS eq A2, but in reverse order (?)
+         rr[lap1*ldrr*3+0] = double(la)*g*rr[lam1*ldrr*3+0] + rap[0]*rr[la*ldrr*3+0];
+         rr[lap1*ldrr*3+1] = double(la)*g*rr[lam1*ldrr*3+1] + rap[1]*rr[la*ldrr*3+1];
+         rr[lap1*ldrr*3+2] = double(la)*g*rr[lam1*ldrr*3+2] + rap[2]*rr[la*ldrr*3+2];
+      }
+   }
+   //!
+   //! recursion along lb for all la
+   //!
+   if (lb_max > 0) {
+      // <s|p> = (p-b) <s|s>
+      rr[ldrr*3+0] = rbp[0];
+      rr[ldrr*3+1] = rbp[1];
+      rr[ldrr*3+2] = rbp[2];
+      //!
+      for( int la=1 ; la <= la_max ; la++ ){ // DO la = 1, la_max
+         int lam1 = la - 1;
+         // <a|p> = <a|s+1> = 1/2z Na <a-1|s> + (p-b) <a|s> . Ref OS eq A2 with b<=>a
+         rr[(la*ldrr+1)*3+0] = double(la)*g*rr[lam1*ldrr*3+0] + rbp[0]*rr[la*ldrr*3+0];
+         rr[(la*ldrr+1)*3+1] = double(la)*g*rr[lam1*ldrr*3+1] + rbp[1]*rr[la*ldrr*3+1];
+         rr[(la*ldrr+1)*3+2] = double(la)*g*rr[lam1*ldrr*3+2] + rbp[2]*rr[la*ldrr*3+2];
+      }
+      //!
+      for( int lb=1 ; lb < lb_max; lb++ ){ // DO lb = 1, lb_max - 1
+         int lbp1 = lb + 1;
+         int lbm1 = lb - 1;
+         // <s|b+1> = 1/2z Nb <s|p-1> + (p-b) <s|p>. Ref OS eq A2 with b<=>a
+         rr[lbp1*3+0] = double(lb)*g*rr[lbm1*3+0] + rbp[0]*rr[lb*3+0];
+         rr[lbp1*3+1] = double(lb)*g*rr[lbm1*3+1] + rbp[1]*rr[lb*3+1];
+         rr[lbp1*3+2] = double(lb)*g*rr[lbm1*3+2] + rbp[2]*rr[lb*3+2];
+         for( int la=1; la <= la_max; la++ ){ // DO la = 1, la_max
+            int lam1 = la - 1;
+            // <a|b+1> = 1/2z Na <a-1|b> + 1/2z Nb <a|b-1> + (p-b) <a|b>
+            rr[(la*ldrr+lbp1)*3+0] = g*(double(la)*rr[(lam1*ldrr+lb)*3+0] + double(lb)*rr[(la*ldrr+lbm1)*3+0]) + rbp[0]*rr[(la*ldrr+lb)+0];
+            rr[(la*ldrr+lbp1)*3+1] = g*(double(la)*rr[(lam1*ldrr+lb)*3+1] + double(lb)*rr[(la*ldrr+lbm1)*3+1]) + rbp[1]*rr[(la*ldrr+lb)+1];
+            rr[(la*ldrr+lbp1)*3+2] = g*(double(la)*rr[(lam1*ldrr+lb)*3+2] + double(lb)*rr[(la*ldrr+lbm1)*3+2]) + rbp[2]*rr[(la*ldrr+lb)+2];
+         }
+      }
+   }
+}
+
+
+__host__ __device__ void overlap_ab_zeta( 
+      int la_max, int la_min, int ipgfa, double rpgfa, double zeta, 
+      int lb_max, int lb_min, int jpgfb, double rpgfb, double zetb,
+      double* rab, double* sab, double* dab, double* ddab, int lds, double* rr, int ldrr )
+{
+   // computes the na*nb integrals int dr (r-A)^La (r-B)^Lb exp(-zeta(r-A)**2) exp(-zetb(r-B)**2)
+   // for each combination of lax+lay+laz=La and lbx+lby+lbz=Lb
+   // saves them in the sub-matrix sab[ na*ipgfa ][ nb*jpgfb ]
+   int ofa = ncoset(la_min - 1);
+   int ofb = ncoset(lb_min - 1);
+   int na = ncoset(la_max) - ofa;
+   int nb = ncoset(lb_max) - ofb;
+   int lma = la_max;
+   int lmb = lb_max;
+ 
+   int ma = na * ipgfa;
+   int mb = nb * jpgfb;
+
+   double rab2 = rab[0]*rab[0] + rab[1]*rab[1] + rab[2]*rab[2];
+   double tab = sqrt(rab2);
+   if ( (rpgfa + rpgfb) < tab ){
+      for( int i=0; i<na; i++ ){
+      for( int j=0; j<nb; j++ ){
+         sab[ (ma+i)*lds+ mb+j ] = 0.0;
+      }}
+      return;
+   }
+   
+   //! Calculate some prefactors
+   double a = zeta;
+   double b = zetb;
+   double zet = a + b;
+   double xhi = a*b/zet;
+   double rap[3], rbp[3];
+   rap[0] = b*rab[0]/zet;
+   rap[1] = b*rab[1]/zet;
+   rap[2] = b*rab[2]/zet;
+   rbp[0] = -a*rab[0]/zet;
+   rbp[1] = -a*rab[1]/zet;
+   rbp[2] = -a*rab[2]/zet;
+   //! [s|s] integral
+   double pi_zet = M_PI/zet;
+   double f0 = sqrt(pi_zet*pi_zet*pi_zet)*exp(-xhi*rab2);
+
+   //! Calculate the recurrence relation
+   os_rr_ovlp(rap, lma, rbp, lmb, zet, ldrr, rr);
+
+   for( int lb = lb_min; lb <= lb_max; lb++ ){ // DO lb = lb_min, lb_max
+   for( int bx = 0; bx <= lb ; bx++ ){ // DO bx = 0, lb
+   for( int by = 0; by <= lb-bx; lb++ ){ // DO by = 0, lb - bx
+      int bz = lb - bx - by;
+      int cob = coset(bx, by, bz) - ofb;
+      int ib = mb + cob;
+      for( int la = la_min ; la <= la_max ; la++ ){ // DO la = la_min, la_max
+      for( int ax = 0 ; ax <= la ; ax++ ){ // DO ax = 0, la
+      for( int ay = 0; ay <= la-ax; ay++ ){ // DO ay = 0, la - ax
+         int az = la - ax - ay;
+         int coa = coset(ax, ay, az) - ofa;
+         int ia = ma + coa;
+         //! integrals
+         // uses: int dx dy dz (x-Ax)^lax (y-Ay)^lay (z-Az)^laz exp(-zeta(r-A)**2)) * [ Same with B ] =
+         //       = int dx (x-Ax)^lax (x-Bx)^lbx exp( -zeta (x-Ax)^2 ) exp( -zetb (x-Bx)^2 ) * [ Same on y and z ]
+//       sab[ia][ib]     = f0*rr[ax][bx][0]         *rr[ay][by][1]         *rr[az][bz][2];
+         sab[ia*lds+ ib] = f0*rr[(ax*ldrr+bx)*3+0]*rr[(ay*ldrr+by)*3+1]*rr[(az*ldrr+bz)*3+2];
+      }}}
+   }}}
+}
+
+__global__ void overlap_ab_gpu_kernel( 
+      int la_max, int la_min, int npgfa, double* rpgfa, double* zeta,
+      int lb_max, int lb_min, int npgfb, double* rpgfb, double* zetb,
+      double* rab, double* sab, double* dab, double* ddab, int lds, double* rr, int ldrr ){
+   // if the thread is in the valid subset, assign it its zet coefficents and its workspace on rr
+   int ipgfa = threadIdx.x;
+   int jpgfb = threadIdx.y;
+   if ( (ipgfa < npgfa) and (jpgfb < npgfb ) ){
+      double* rr_subset = &(rr[ldrr*ldrr*3*(ipgfa*npgfb+jpgfb)]);
+      overlap_ab_zeta(
+         la_max, la_min, ipgfa, rpgfa[ipgfa], zeta[ipgfa],
+         lb_max, lb_min, jpgfb, rpgfb[jpgfb], zetb[jpgfb],
+         rab, sab, dab, ddab, lds, rr_subset, ldrr );
+   }
+}
+
+
+
 
 extern "C" {
+
+
+void overlap_ab_gpu(
+      int la_max, int la_min, int npgfa, double* rpgfa, double* zeta,
+      int lb_max, int lb_min, int npgfb, double* rpgfb, double* zetb,
+      double* rab, double* sab, double* dab, double* ddab, int lds )
+{
+   double *rr_dev = NULL;
+   double *sab_dev = NULL;
+   double *zeta_dev = NULL;
+   double *zetb_dev = NULL;
+   double *rpgfa_dev = NULL;
+   double *rpgfb_dev = NULL;
+   double *rab_dev = NULL;
+   int lma = la_max;
+   int lmb = lb_max;
+   int ldrr = max(lma, lmb) + 1;
+
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &rr_dev, npgfa*npgfb*ldrr*ldrr*3*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &sab_dev, lds*lds*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &zeta_dev, npgfa*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &zetb_dev, npgfb*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &rpgfa_dev, npgfa*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &rpgfb_dev, npgfb*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &rab_dev, 3*sizeof(double) ));
+
+   GPU_ERROR_CHECK(cudaMemset(   sab_dev, 0, lds*lds*sizeof(double)));  
+
+   GPU_ERROR_CHECK(cudaMemcpy(  zeta_dev,  zeta, npgfa*sizeof(double), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy(  zetb_dev,  zetb, npgfb*sizeof(double), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( rpgfa_dev, rpgfa, npgfa*sizeof(double), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( rpgfb_dev, rpgfb, npgfb*sizeof(double), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy(   rab_dev,   rab, 3*sizeof(double), cudaMemcpyHostToDevice ));
+
+   dim3 npgf_ab(npgfa, npgfb);
+   overlap_ab_gpu_kernel<<<1, npgf_ab >>>(
+         la_max, la_min, npgfa, rpgfa_dev, zeta_dev,
+         lb_max, lb_min, npgfb, rpgfb_dev, zetb_dev,
+         rab_dev, sab_dev, NULL, NULL, lds, rr_dev, ldrr );
+   GPU_ERROR_CHECK(cudaGetLastError() );
+
+   GPU_ERROR_CHECK(cudaMemcpy( sab, sab_dev, lds*lds*sizeof(double), cudaMemcpyDeviceToHost ));
+
+   GPU_ERROR_CHECK(cudaFree(zeta_dev));
+   GPU_ERROR_CHECK(cudaFree(zetb_dev));
+   GPU_ERROR_CHECK(cudaFree(rpgfa_dev));
+   GPU_ERROR_CHECK(cudaFree(rpgfb_dev));
+   GPU_ERROR_CHECK(cudaFree(rab_dev));
+   GPU_ERROR_CHECK(cudaFree(rr_dev));
+   GPU_ERROR_CHECK(cudaFree(sab_dev));
+}
+
 /*
    overlap integral v1, unoptmized
    sab : overlap matrix element over contracted Gaussian functions
@@ -526,30 +384,30 @@ extern "C" {
    Unlike Fortran, arrays' indicies in C start from 0.
 */
 void overlap_ab_cgf_gpu_legacy(
-   REAL_T *sab, int la_set, int npgf_a, const REAL_T *zet_a, const REAL_T *gcc_a,
-   int lb_set, int npgf_b, const REAL_T *zet_b, const REAL_T *gcc_b, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
+   double *sab, int la_set, int npgf_a, const double *zet_a, const double *gcc_a,
+   int lb_set, int npgf_b, const double *zet_b, const double *gcc_b, double rab_x, double rab_y, double rab_z)
 {
    unsigned int ncoa = get_nco(la_set);
    unsigned int ncob = get_nco(lb_set);
-   REAL_T *sab_pgf_dev = NULL;
-   REAL_T *sab_dev = NULL;
-   REAL_T *zet_a_dev = NULL;
-   REAL_T *zet_b_dev = NULL;
-   REAL_T *gcc_a_dev = NULL;
-   REAL_T *gcc_b_dev = NULL;
+   double *sab_pgf_dev = NULL;
+   double *sab_dev = NULL;
+   double *zet_a_dev = NULL;
+   double *zet_b_dev = NULL;
+   double *gcc_a_dev = NULL;
+   double *gcc_b_dev = NULL;
 
-   GPU_ERROR_CHECK(cudaMalloc( (void**) &sab_pgf_dev, npgf_a*npgf_b*ncoa*ncob*sizeof(REAL_T) ));
-   GPU_ERROR_CHECK(cudaMalloc( (void**) &sab_dev, ncoa*ncob*sizeof(REAL_T) ));
-   GPU_ERROR_CHECK(cudaMalloc( (void**) &zet_a_dev, npgf_a*sizeof(REAL_T) ));
-   GPU_ERROR_CHECK(cudaMalloc( (void**) &zet_b_dev, npgf_b*sizeof(REAL_T) ));
-   GPU_ERROR_CHECK(cudaMalloc( (void**) &gcc_a_dev, ncoa*npgf_a*sizeof(REAL_T) ));
-   GPU_ERROR_CHECK(cudaMalloc( (void**) &gcc_b_dev, ncob*npgf_b*sizeof(REAL_T) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &sab_pgf_dev, npgf_a*npgf_b*ncoa*ncob*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &sab_dev, ncoa*ncob*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &zet_a_dev, npgf_a*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &zet_b_dev, npgf_b*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &gcc_a_dev, ncoa*npgf_a*sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &gcc_b_dev, ncob*npgf_b*sizeof(double) ));
    
-   GPU_ERROR_CHECK(cudaMemcpy( zet_a_dev, zet_a, npgf_a*sizeof(REAL_T), cudaMemcpyHostToDevice ));
-   GPU_ERROR_CHECK(cudaMemcpy( zet_b_dev, zet_b, npgf_b*sizeof(REAL_T), cudaMemcpyHostToDevice ));
-   GPU_ERROR_CHECK(cudaMemcpy( gcc_a_dev, gcc_a, ncoa*npgf_a*sizeof(REAL_T), cudaMemcpyHostToDevice ));
-   GPU_ERROR_CHECK(cudaMemcpy( gcc_b_dev, gcc_b, ncob*npgf_b*sizeof(REAL_T), cudaMemcpyHostToDevice ));
-   GPU_ERROR_CHECK(cudaMemset( sab_dev, 0, ncoa*ncob*sizeof(REAL_T)));
+   GPU_ERROR_CHECK(cudaMemcpy( zet_a_dev, zet_a, npgf_a*sizeof(double), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( zet_b_dev, zet_b, npgf_b*sizeof(double), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( gcc_a_dev, gcc_a, ncoa*npgf_a*sizeof(double), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemcpy( gcc_b_dev, gcc_b, ncob*npgf_b*sizeof(double), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemset( sab_dev, 0, ncoa*ncob*sizeof(double)));
 
    dim3 npgf_ab(npgf_a, npgf_b);
 //   printf("A %d %d %d \n", npgf_a*npgf_b, ncoa, ncob);
@@ -557,7 +415,7 @@ void overlap_ab_cgf_gpu_legacy(
          sab_dev, sab_pgf_dev, gcc_a_dev, gcc_b_dev, zet_a_dev, zet_b_dev,
          la_set, lb_set, ncoa, ncob, rab_x, rab_y, rab_z );
    GPU_ERROR_CHECK(cudaGetLastError() );
-   GPU_ERROR_CHECK(cudaMemcpy( sab, sab_dev, ncoa*ncob*sizeof(REAL_T), cudaMemcpyDeviceToHost ));
+   GPU_ERROR_CHECK(cudaMemcpy( sab, sab_dev, ncoa*ncob*sizeof(double), cudaMemcpyDeviceToHost ));
    GPU_ERROR_CHECK(cudaFree(zet_a_dev));
    GPU_ERROR_CHECK(cudaFree(zet_b_dev));
    GPU_ERROR_CHECK(cudaFree(gcc_a_dev));
@@ -566,14 +424,14 @@ void overlap_ab_cgf_gpu_legacy(
    GPU_ERROR_CHECK(cudaFree(sab_dev));
 }
 
-void overlap_ab_cgf(REAL_T *sab, int la_set, int npgf_a, const REAL_T *zet_a, const REAL_T *gcc_a, int lb_set, int npgf_b, const REAL_T *zet_b,
-                    const REAL_T *gcc_b, REAL_T rab_x, REAL_T rab_y, REAL_T rab_z)
+void overlap_ab_cgf(double *sab, int la_set, int npgf_a, const double *zet_a, const double *gcc_a, int lb_set, int npgf_b, const double *zet_b,
+                    const double *gcc_b, double rab_x, double rab_y, double rab_z)
 {
    unsigned int ncoa = get_nco(la_set);
    unsigned int ncob = get_nco(lb_set);
-   REAL_T *sab_pgf = NULL;
+   double *sab_pgf = NULL;
 
-   sab_pgf = (REAL_T*) malloc(ncoa*ncob*sizeof(*sab_pgf));
+   sab_pgf = (double*) malloc(ncoa*ncob*sizeof(*sab_pgf));
    if (sab_pgf == NULL) return;
 
    memset(sab, 0, ncoa*ncob*sizeof(*sab));
@@ -623,7 +481,7 @@ __global__ void compute_s_gpu_kernel ( int* list_ijd_dev, int* bas_dev, double* 
    int ipgf_b = threadIdx.y;
    int npgf_a = bas_dev[i+BAS_OFFSET_NPGF];
    int npgf_b = bas_dev[j+BAS_OFFSET_NPGF];
-   // We size the block to accomodate the largest contractionso smaller contractions only use a subset of the threads
+   // We size the block to accomodate the largest contraction
    // so smaller contractions only use a subset of the threads
    // worse case is a contraction with high angular moment and a single coefficient
    // in which case one thread is doing all L calculations
@@ -661,18 +519,18 @@ __global__ void compute_s_gpu_kernel ( int* list_ijd_dev, int* bas_dev, double* 
 
       //
       // Compute the gaussian integrals and saves them in sab_pgf
-/*      if (la == 0 && lb == 0) {
-         overlap_primitive_ss(&sab_pgf[0], zet_a, zet_b, rab_x, rab_y, rab_z);
+      if (la == 0 && lb == 0) {
+         overlap_primitive_ss(s, zet_a, zet_b, rab_x, rab_y, rab_z);
       } else if (la == 0 && lb == 1) {
-         overlap_primitive_sp(sab_pgf, zet_a, zet_b, rab_x, rab_y, rab_z);
+         overlap_primitive_sp(s, zet_a, zet_b, rab_x, rab_y, rab_z);
       } else if (la == 1 && lb == 0) {
-         overlap_primitive_ps(sab_pgf, zet_a, zet_b, rab_x, rab_y, rab_z);
+         overlap_primitive_ps(s, zet_a, zet_b, rab_x, rab_y, rab_z);
       } else if (la == 1 && lb == 1) {
-         overlap_primitive_pp(sab_pgf, zet_a, zet_b, rab_x, rab_y, rab_z);
+         overlap_primitive_pp(s, zet_a, zet_b, rab_x, rab_y, rab_z);
       }
-*/
 
-      overlap( s, zet_a, zet_b, rab_x, rab_y, rab_z, la, lb );
+
+//      overlap( s, zet_a, zet_b, rab_x, rab_y, rab_z, la, lb );
 
       if (la == 0 && lb == 0) {
          sab_pgf[0] = s[0];
@@ -710,31 +568,31 @@ __global__ void compute_s_gpu_kernel ( int* list_ijd_dev, int* bas_dev, double* 
    }
 }
 
-void compute_s_gpu ( int* list_ijd, int* bas, REAL_T* env, REAL_T* s_sparse,
+void compute_s_gpu ( int* list_ijd, int* bas, double* env, double* s_sparse,
                      int n_pairs,   int nbas, int env_size, int s_sparse_size,
                      int max_npgf_col, int max_npgf_row )
 {
    int* list_ijd_dev = NULL;
    int* bas_dev = NULL;
-   REAL_T* env_dev = NULL;
-   REAL_T* s_sparse_dev = NULL;
+   double* env_dev = NULL;
+   double* s_sparse_dev = NULL;
    dim3 max_npgf_ab(max_npgf_col, max_npgf_row);
 
    // copy list of pairs and enviroment to gpu
    GPU_ERROR_CHECK(cudaMalloc( (void**) &list_ijd_dev, n_pairs * PAL_SLOTS * sizeof(int) ));
    GPU_ERROR_CHECK(cudaMalloc( (void**) &bas_dev, nbas * BAS_SLOTS * sizeof(int) ));
-   GPU_ERROR_CHECK(cudaMalloc( (void**) &env_dev, env_size * sizeof(REAL_T) ));
-   GPU_ERROR_CHECK(cudaMalloc( (void**) &s_sparse_dev, s_sparse_size * sizeof(REAL_T) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &env_dev, env_size * sizeof(double) ));
+   GPU_ERROR_CHECK(cudaMalloc( (void**) &s_sparse_dev, s_sparse_size * sizeof(double) ));
 
    GPU_ERROR_CHECK(cudaMemcpy( list_ijd_dev, list_ijd, n_pairs * PAL_SLOTS * sizeof(int), cudaMemcpyHostToDevice ));
    GPU_ERROR_CHECK(cudaMemcpy( bas_dev, bas, nbas * BAS_SLOTS * sizeof(int), cudaMemcpyHostToDevice ));
-   GPU_ERROR_CHECK(cudaMemcpy( env_dev, env, env_size * sizeof(REAL_T), cudaMemcpyHostToDevice ));
-   GPU_ERROR_CHECK(cudaMemset( s_sparse_dev, 0.0, s_sparse_size*sizeof(REAL_T)));
+   GPU_ERROR_CHECK(cudaMemcpy( env_dev, env, env_size * sizeof(double), cudaMemcpyHostToDevice ));
+   GPU_ERROR_CHECK(cudaMemset( s_sparse_dev, 0.0, s_sparse_size*sizeof(double)));
    // work
    compute_s_gpu_kernel<<< n_pairs, max_npgf_ab>>> ( list_ijd_dev, bas_dev, env_dev, s_sparse_dev );
    GPU_ERROR_CHECK(cudaGetLastError() );
    // copy back to ram and free memory
-   GPU_ERROR_CHECK(cudaMemcpy( s_sparse, s_sparse_dev, s_sparse_size * sizeof(REAL_T), cudaMemcpyDeviceToHost ));
+   GPU_ERROR_CHECK(cudaMemcpy( s_sparse, s_sparse_dev, s_sparse_size * sizeof(double), cudaMemcpyDeviceToHost ));
    GPU_ERROR_CHECK(cudaFree(list_ijd_dev));
    GPU_ERROR_CHECK(cudaFree(bas_dev));
    GPU_ERROR_CHECK(cudaFree(env_dev));
@@ -742,16 +600,16 @@ void compute_s_gpu ( int* list_ijd, int* bas, REAL_T* env, REAL_T* s_sparse,
 }
 
 
-void norm_cgf_gto(int l_set, int npgf, const REAL_T *zet, const REAL_T *gcc, REAL_T *gcc_total)
+void norm_cgf_gto(int l_set, int npgf, const double *zet, const double *gcc, double *gcc_total)
 {
 
    unsigned int nco = get_nco(l_set);
-   REAL_T *sab = NULL;
-   REAL_T zero = (REAL_T)0.0;
-   REAL_T norm;
+   double *sab = NULL;
+   double zero = (double)0.0;
+   double norm;
 
    // sab(1:nco, 1:nco, 1:npgf, 1:npgf)
-   sab = (REAL_T*) malloc(nco*nco*npgf*npgf*sizeof(*sab));
+   sab = (double*) malloc(nco*nco*npgf*npgf*sizeof(*sab));
    if (sab == NULL) return;
 
    for (int ipgf = 0; ipgf < npgf; ++ipgf) {
@@ -771,7 +629,7 @@ void norm_cgf_gto(int l_set, int npgf, const REAL_T *zet, const REAL_T *gcc, REA
          gcc_total[ico*npgf+ipgf] = gcc[ipgf] / sqrt(sab[((ipgf*npgf+ipgf)*nco+ico)*nco+ico]);
       }
 
-      norm = (REAL_T)0.0;
+      norm = (double)0.0;
       for ( int ipgf = 0; ipgf < npgf; ++ipgf) {
          for ( int jpgf = 0; jpgf < npgf; ++jpgf) {
              // sab(ico, ico, jpgf, ipgf)
@@ -779,7 +637,7 @@ void norm_cgf_gto(int l_set, int npgf, const REAL_T *zet, const REAL_T *gcc, REA
          }
       }
 
-      norm = (REAL_T)1.0 / sqrt(norm);
+      norm = (double)1.0 / sqrt(norm);
 
       for ( int ipgf = 0; ipgf < npgf; ++ipgf) {
          gcc_total[ico*npgf+ipgf] = gcc_total[ico*npgf+ipgf] * norm;
