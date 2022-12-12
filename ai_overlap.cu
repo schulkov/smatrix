@@ -232,6 +232,17 @@ __host__ __device__ void os_rr_ovlp( double rap[3], int la_max, double rbp[3], i
    }
 }
 
+__host__ __device__ void next_Lxyz( int* __restrict__ lx, int* __restrict__ ly, int* __restrict__ lz, int* __restrict__ l ){
+   if (*lz == *l) {
+      (*l)++; (*lx) = (*l); (*lz) = 0;
+   } else {
+      if (*ly == 0) {
+         (*lz) = 0; (*lx)--;
+      } else {
+         (*lz)++;
+      }
+   }
+}
 
 __host__ __device__ void overlap_ab_zeta( 
       int la_max, int la_min, int ipgfa, double rpgfa, double zeta, 
@@ -239,7 +250,7 @@ __host__ __device__ void overlap_ab_zeta(
       double* rab, double* sab, double* dab, double* ddab, int lds, double* rr, int ldrr )
 {
    // computes the na*nb integrals int dr (r-A)^La (r-B)^Lb exp(-zeta(r-A)**2) exp(-zetb(r-B)**2)
-   // for each combination of lax+lay+laz=La and lbx+lby+lbz=Lb
+   // for each combination of lax+lay+laz=[La_min:La_max] and lbx+lby+lbz=[Lb_min:lb_max]
    // saves them in the sub-matrix sab[ na*ipgfa ][ nb*jpgfb ]
    int ofa = ncoset(la_min - 1);
    int ofb = ncoset(lb_min - 1);
@@ -279,7 +290,56 @@ __host__ __device__ void overlap_ab_zeta(
 
    //! Calculate the recurrence relation
    os_rr_ovlp(rap, lma, rbp, lmb, zet, ldrr, rr);
+   // la,ax,ay,az could be in the for expression to limit their scope, but it would be even (more) unreadable
+   int la = la_min;
+   int ax = la_min;
+   int ay = 0;
+   int az = 0;
+   for( int coa = ncoset(la_min); coa <= ncoset(la_max); coa++ ){
+      int ia = ma + coa;
+      int lb = lb_min;
+      int bx = lb_min;
+      int by = 0;
+      int bz = 0;
+      // 
+      const double* const rr_ax = &rr[(ax*ldrr)*3];
+      const double* const rr_ay = &rr[(ay*ldrr)*3];
+      const double* const rr_az = &rr[(az*ldrr)*3];
+      for( int cob = ncoset(lb_min); cob <= ncoset(lb_max); cob++ ){
+         int ib = mb + cob;
+         // contigous in access to sab. Very not cont. when accessing the smaller rr[] arrays
+         sab[ia*lds+ ib] = f0*rr_ax[bx*3+0]*rr_ay[by*3+1]*rr_az[bz*3+2];
+         // next bx,by,bz,lb quartet
+         if (bz == lb) {
+            // if bz is equal to l it means we have computed all integrals for this l
+            // so we move to the next l value and reset bx,by and bz
+            lb += 1; bx = lb; bz = 0; // by = 0 is done automatically at the end
+         } else {
+           if (by == 0) {
+               // if by == 0 it means we have exausted the [y,z] subspace and move to the next x
+               bz = 0; bx -= 1;
+           } else {
+               // explore the current [y,z]=l-lx subspace
+               bz += 1;
+           }
+         }
+         // why bother incrementing and decrementing ly
+         by = lb - bx - bz;
+      }
+      // next ax,ay,az,la quartet
+      if (az == la) {
+         la += 1; ax = la; az = 0;
+      } else {
+        if (ay == 0) {
+            az = 0; ax -= 1;
+        } else {
+            az += 1;
+        }
+      }
+      ay = la - ax - az;
+   }
 
+/*
    for( int lb = lb_min; lb <= lb_max; lb++ ){ // DO lb = lb_min, lb_max
    for( int bx = 0; bx <= lb ; bx++ ){ // DO bx = 0, lb
    for( int by = 0; by <= lb-bx; lb++ ){ // DO by = 0, lb - bx
@@ -299,6 +359,8 @@ __host__ __device__ void overlap_ab_zeta(
          sab[ia*lds+ ib] = f0*rr[(ax*ldrr+bx)*3+0]*rr[(ay*ldrr+by)*3+1]*rr[(az*ldrr+bz)*3+2];
       }}}
    }}}
+*/
+
 }
 
 __global__ void overlap_ab_gpu_kernel( 
@@ -372,6 +434,28 @@ void overlap_ab_gpu(
    GPU_ERROR_CHECK(cudaFree(rr_dev));
    GPU_ERROR_CHECK(cudaFree(sab_dev));
 }
+
+/*
+   overlap integral v1, unoptmized
+   sab : overlap matrix element over contracted Gaussian functions
+   la_set, lb_set : angular momenta
+   npgf_a, npgf_b : number of primitive Gaussian functions in contracted sets
+   zet_a(1:npgf_a), zet_b(1:npgf_b) : Gaussian exponents
+         rab_dev, sab_dev, NULL, NULL, lds, rr_dev, ldrr );
+   GPU_ERROR_CHECK(cudaGetLastError() );
+
+   GPU_ERROR_CHECK(cudaMemcpy( sab, sab_dev, lds*lds*sizeof(double), cudaMemcpyDeviceToHost ));
+
+   GPU_ERROR_CHECK(cudaFree(zeta_dev));
+   GPU_ERROR_CHECK(cudaFree(zetb_dev));
+   GPU_ERROR_CHECK(cudaFree(rpgfa_dev));
+   GPU_ERROR_CHECK(cudaFree(rpgfb_dev));
+   GPU_ERROR_CHECK(cudaFree(rab_dev));
+   GPU_ERROR_CHECK(cudaFree(rr_dev));
+   GPU_ERROR_CHECK(cudaFree(sab_dev));
+}
+*/
+
 
 /*
    overlap integral v1, unoptmized
@@ -602,12 +686,10 @@ void compute_s_gpu ( int* list_ijd, int* bas, double* env, double* s_sparse,
 
 void norm_cgf_gto(int l_set, int npgf, const double *zet, const double *gcc, double *gcc_total)
 {
-
-   unsigned int nco = get_nco(l_set);
    double *sab = NULL;
    double zero = (double)0.0;
    double norm;
-
+   unsigned int nco = get_nco(l_set);
    // sab(1:nco, 1:nco, 1:npgf, 1:npgf)
    sab = (double*) malloc(nco*nco*npgf*npgf*sizeof(*sab));
    if (sab == NULL) return;
