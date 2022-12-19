@@ -169,6 +169,7 @@ __host__ __device__ inline unsigned int get_nco(int l){
    return nco;
 }
 
+
 __host__ __device__ void os_rr_ovlp( double rap[3], int la_max, double rbp[3], int lb_max, double zet, int ldrr, double* rr ){
    // uses the Obara-Saika Recurrence Relations to compute integrals of the type 
    // (x-Ax)^La (x-Bx)^Lb exp(-zeta(r-A)**2) exp(-zetb(r-B)**2)
@@ -363,9 +364,63 @@ __host__ __device__ void overlap_ab_zeta(
 
 }
 
+
+__device__ void contraction (
+      double* sab, double* qab, double* ca, int na, int ma, double* cb, int nb, int mb, double fscale=1.0, bool trans=false,
+      int lda=0, int ldb=0, int lds=0, int ldq=0, double* work=NULL ){
+//!  CALL dgemm("N", "N", nal, mbl, nbl, 1.0_dp, sab(1, 1), lds, cb(1, 1), ldb, 0.0_dp, work(1, 1), ldw)
+//   work(1:nal, 1:mbl) = MATMUL(sab(1:nal, 1:nbl), cb(1:nbl, 1:mbl))
+   if (lda==0) lda = ma;
+   if (ldb==0) ldb = mb;
+   if (lds==0) lds = mb;
+   if (ldq==0 and trans ) ldq = ma;
+   if (ldq==0 and not trans ) ldq = mb;
+   int i = threadIdx.x;
+   int j = threadIdx.y;
+   double w = 0.;
+   int ldw = mb;
+   if ( ( i < na ) and ( j < mb ) ){
+      for( int k = 0 ; k < nb; k++ ){
+         w += sab[ i*lds + k] * cb[ k * ldb + j];
+      }
+      work[ i*ldw + j ] = fscale * w; // note: fscale mult. moved here
+   }
+   __syncthreads();
+   w = 0.;
+
+   if (trans) {
+//  if trans: Q = fs * ( S @ Cb ).T @ Ca = fs * ( Ca.T @ ( S @ Cb ) ).T = fs * ( Cb.T @ S.T ) @ Ca
+//  else:     Q = fs * Ca.T @ ( S @ Cb )
+//
+//! CALL dgemm("T", "N", mbl, mal, nal, fs, work(1, 1), ldw, ca(1, 1), lda, 0.0_dp, qab(1, 1), ldq)
+//  qab(1:mbl, 1:mal) = fs*MATMUL(TRANSPOSE(work(1:nal, 1:mbl)), ca(1:nal, 1:mal))
+      if ( ( i < mb ) and ( j < ma ) ){
+         for( int k = 0 ; k < na ; k++ ){
+            w += work[ k*ldw + i ] * ca[ k*lda + j ];
+         }
+         qab[ i*ldq + j] = w ;
+      }
+   } else {
+//! CALL dgemm("T", "N", mal, mbl, nal, fs, ca(1, 1), lda, work(1, 1), ldw, 0.0_dp, qab(1, 1), ldq)
+//  qab(1:mal, 1:mbl) = fs*MATMUL(TRANSPOSE(ca(1:nal, 1:mal)), work(1:nal, 1:mbl))
+      if ( ( i < ma ) and ( j < mb ) ){
+         for( int k = 0 ; k < na ; k++ ){
+            w += ca[ k*lda + i ] * work[ k*ldw + j ];
+         }
+         qab[ i*ldq + j] = w ;
+      }
+   }
+}
+
+
 __global__ void overlap_ab_gpu_kernel( 
       int la_max, int la_min, int npgfa, double* rpgfa, double* zeta,
       int lb_max, int lb_min, int npgfb, double* rpgfb, double* zetb,
+      double* rab, double* sab, double* dab, double* ddab, int lds, double* rr, int ldrr ){}
+
+__global__ void overlap_contract_gpu_kernel(
+      int la_max, int la_min, int npgfa, double* rpgfa, double* zeta, double* scon_a,
+      int lb_max, int lb_min, int npgfb, double* rpgfb, double* zetb, double* scon_b,
       double* rab, double* sab, double* dab, double* ddab, int lds, double* rr, int ldrr ){
    // if the thread is in the valid subset, assign it its zet coefficents and its workspace on rr
    int ipgfa = threadIdx.x;
@@ -377,6 +432,9 @@ __global__ void overlap_ab_gpu_kernel(
          lb_max, lb_min, jpgfb, rpgfb[jpgfb], zetb[jpgfb],
          rab, sab, dab, ddab, lds, rr_subset, ldrr );
    }
+   __syncthreads();
+   contraction ( sab, sab_sph, ca, na, ma, cb, nb, mb, 1.0);
+
 }
 
 

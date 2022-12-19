@@ -23,12 +23,16 @@ IMPLICIT NONE
    integer, allocatable, dimension(:,:) :: list_ijd
    integer :: sij_offset, ij_idx, n_pairs, s_size, curr_env_offset, sij_size, max_sij_size, max_npgf_col, max_npgf_row
    real(kind=dp) :: r2
-   real(kind=dp), parameter :: s_prescreen_thrs_squared = 150.0_dp**2 ! units ? should be bohr^2
+   real(kind=dp), parameter :: s_prescreen_thrs_squared = 30.0_dp**2 ! units ? should be bohr^2
    integer :: co_col, co_row, pair_idx, idx
    real(kind=dp) :: val ,ref
    ! read input files
-   cgf_in_row = "01-NaCl-bulk_SZV-MOLOPT_row_unitcell.cgfs"
-   cgf_in_col = "01-NaCl-bulk_SZV-MOLOPT_col_supercell.cgfs"
+!   cgf_in_row = "01-NaCl-bulk_SZV-MOLOPT_col_supercell.cgfs"
+!   cgf_in_col = "01-NaCl-bulk_SZV-MOLOPT_col_supercell.cgfs"
+   cgf_in_row = "02-NaCl-bulk_SZV-MOLOPT_col_supercell.cgfs"
+   cgf_in_col = "02-NaCl-bulk_SZV-MOLOPT_col_supercell.cgfs"
+
+
 
    CALL read_cgf_basis_set(TRIM(cgf_in_row), atoms_row, cgfs_row)
    DO irow = 1,SIZE(atoms_row)
@@ -105,15 +109,16 @@ IMPLICIT NONE
       rab = atoms_row(cgfs_row(icgf_row)%iatom)%r - atoms_col(cgfs_col(icgf_col)%iatom)%r
       CALL overlap_ab_cgf_interface(cgfs_row(icgf_row), cgfs_col(icgf_col), rab, sab_cgf)
       ! Cartesian Gaussians -> Spherical Gaussians
-!      CALL convert_matrix_cgf_to_sgf(cgfs_row(icgf_row:icgf_row), cgfs_col(icgf_col:icgf_col), sab_cgf, sab_sgf)
+      CALL convert_matrix_cgf_to_sgf(cgfs_row(icgf_row:icgf_row), cgfs_col(icgf_col:icgf_col), sab_cgf, sab_sgf)
       do co_row=1, nco_row
          do co_col=1, nco_col
             idx = sij_offset+(co_row-1)*nco_col+co_col-1
             val = s_sparse(idx)
             ref = sab_cgf(co_row, co_col)
             if ( (val-ref)**2 > 1.e-12 ) then
-              print *, 'wrong value at icgf_col, icgf_row, co_row, co_col, idx, val , ref: ', & 
-                       icgf_col, icgf_row, co_row, co_col, idx, val , ref
+              print *, 'wrong value at icgf_col, icgf_row, li, lj, co_row, co_col, idx, val , ref: ', & 
+                                       icgf_col, icgf_row, cgfs_col(icgf_col)%l , cgfs_row(icgf_row)%l, &
+                                                                   co_row, co_col, idx, val , ref
               end if
          end do
       end do

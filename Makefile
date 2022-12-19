@@ -3,7 +3,7 @@ FFLAGS = -O3 -Wall -std=f2008
 CC = gcc
 CFLAGS = -O3 -Wall
 NVCC = nvcc
-NVCFLAGS = -O3 --shared -arch=sm_70 --compiler-options -Wall
+NVCFLAGS = -O3 --shared -arch=sm_80 --compiler-options -Wall
 LIBS = -lcudart
 
 # Avoid funny character set dependencies
