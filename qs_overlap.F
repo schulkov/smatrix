@@ -222,11 +222,11 @@ CONTAINS
       TYPE(qs_kind_type), DIMENSION(:), POINTER          :: qs_kind_set
       TYPE(virial_type), POINTER                         :: virial
 
-      integer                                            :: offset
+      integer                                            :: offset, offset_to_add
       real(kind=dp), allocatable, dimension(:)           :: env
       integer, allocatable, dimension(:,:)               :: bas_a, atm_a, bas_b, atm_b
 
-      integer :: nsetab, sab_dest, qab_dest, set_slot, ma, mb, offset_ai, offset_bj
+      integer :: nsetab, sab_dest, qab_dest, set_slot, ma, mb, offset_ai, offset_bj, r_offset
       integer :: la_max_iset, la_min_iset, npgfa_iset, nsgfa_iset, z_offseta, c_offseta
       integer :: lb_max_jset, lb_min_jset, npgfb_jset, nsgfb_jset, z_offsetb, c_offsetb
       real(kind=dp) , allocatable, dimension(:), target :: zeta_iset, rpgfa_iset, scon_a_iset
@@ -238,6 +238,7 @@ CONTAINS
       real(kind=dp) , allocatable, dimension(:) :: temp_sab, temp_qab
       integer :: iset_iset, jset_jset
       real(kind=dp) , allocatable, dimension(:,:) :: temp_qab_matrix_ref
+      real(kind=dp), allocatable, dimension(:)           :: old_env
 
 !$    INTEGER(kind=omp_lock_kind), &
 !$       ALLOCATABLE, DIMENSION(:) :: locks
@@ -605,6 +606,7 @@ CONTAINS
 
 !      call gen_sab_nl_set( sab_nl_set, sab_nl, basis_set_a, basis_set_b, atm_a, atm_b, sab, qab )
       nsetab = 0
+      offset_to_add = 1
       DO slot = 1, sab_nl(1)%nl_size
          ikind = sab_nl(1)%nlist_task(slot)%ikind
          jkind = sab_nl(1)%nlist_task(slot)%jkind
@@ -615,12 +617,32 @@ CONTAINS
          nseta = basis_set_a%nset
          nsetb = basis_set_b%nset
          nsetab = nsetab + nseta*nsetb
+         set_radius_a => basis_set_a%set_radius
+         set_radius_b => basis_set_b%set_radius
+
+         DO iset = 1, nseta
+            DO jset = 1, nsetb
+               if (set_radius_a(iset) + set_radius_b(jset) < dab) then
+                  cycle
+               else
+                  offset_to_add = offset_to_add + 3
+               end if
+            end do
+         end do
+                  
       end do
-      allocate( sab_nl_set(7,nsetab) )
+      allocate( sab_nl_set(8,nsetab) )
+
+      old_env = env
+      deallocate(env)
+      allocate( env(offset+offset_to_add) )
+      print *, 'Offset:', offset, '->', offset+offset_to_add
+      env(:offset) = old_env(:offset)
 
       sab_dest = 1
       qab_dest = 1
       set_slot = 1
+      
       DO slot = 1, sab_nl(1)%nl_size
          ikind = sab_nl(1)%nlist_task(slot)%ikind
          jkind = sab_nl(1)%nlist_task(slot)%jkind
@@ -651,7 +673,6 @@ CONTAINS
 !         call apply_simmetry( do_symmetric, iatom, jatom, irow, icol, f0, ff )
 !         call absurdly_complicate_get_block( way too many args  )
 
-         ! todo: should check here if any set is interacting ?
          DO iset = 1, nseta
             DO jset = 1, nsetb
                IF (set_radius_a(iset) + set_radius_b(jset) < dab) cycle
@@ -660,10 +681,10 @@ CONTAINS
                ! 1) the index in sab_nl
                ! 2) the index in bas_a with the information for the a set
                ! 3) same for b
-               ! 4) where to save the sab
+               ! 4) where to save sab
                ! 5) where to save qab
                ! 6 & 7) debug, index of set in the sab_nl
-               ! todo: should check here if sets are interacting ?
+               ! 8) offset to env with the distance between centers
                n1 = npgfa(iset)*(ncoset(la_max(iset)) - ncoset(la_min(iset) - 1))
                n2 = npgfb(jset)*(ncoset(lb_max(jset)) - ncoset(lb_min(jset) - 1))
 !               index_of_starting_set_ai = atm_a(5,iatom)
@@ -674,18 +695,22 @@ CONTAINS
                ! stored.
                offset_ai = atm_a(5,iatom)
                offset_bj = atm_b(5,jatom)
-               sab_nl_set( :, set_slot ) = [ slot, offset_ai+iset-1, offset_bj+jset-1, sab_dest, qab_dest, iset, jset ]
+               sab_nl_set( :, set_slot ) = [ slot, offset_ai+iset-1, offset_bj+jset-1, sab_dest, qab_dest, iset, jset, offset+1 ]
+               env ( offset+1 ) = sab_nl(1)%nlist_task(slot)%r(1)
+               env ( offset+2 ) = sab_nl(1)%nlist_task(slot)%r(2)
+               env ( offset+3 ) = sab_nl(1)%nlist_task(slot)%r(3)
                !
                qab_dest = qab_dest + nsgfa(iset) * nsgfb(jset)
                sab_dest = sab_dest + n1 * n2
                set_slot = set_slot + 1
+               offset = offset + 3
             end do
          end do
       end do
       nsetab = set_slot - 1
       allocate(temp_sab(sab_dest-1), temp_qab(qab_dest-1))
 !      end gen_sab_nl_set
-!      call compute_qab_from_nlset( sab_nl_set, sab_nl, bas_a, bas_b, env, do_symmetric )
+!      call compute_qab_from_nlset( sab_nl_set, bas_a, bas_b, temp_sab, env, do_symmetric )
       do set_slot = 1, nsetab
          !
          slot = sab_nl_set( 1, set_slot )
@@ -694,7 +719,8 @@ CONTAINS
          sab_dest = sab_nl_set( 4, set_slot )
          qab_dest = sab_nl_set( 5, set_slot )
          !
-         rab(1:3) = sab_nl(1)%nlist_task(slot)%r(1:3)
+         r_offset = sab_nl_set( 8, set_slot )
+         rab(1:3) = env( r_offset: r_offset+3-1 )
          ! a
          iatom = bas_a(1, iset)
          la_max_iset = bas_a(2, iset)
@@ -705,7 +731,7 @@ CONTAINS
          z_offseta = bas_a(6, iset)
          c_offseta = bas_a(7, iset)       
          ma = nsgfa_iset
-         n1 = npgfa_iset*(ncoset(la_max_iset) - ncoset(la_min_iset - 1))
+         n1 = npgfa_iset*(ncoset(la_max_iset) - ncoset(la_min_iset-1))
          zeta_iset   = env( z_offseta: z_offseta+npgfa_iset-1 )
          rpgfa_iset  = env( z_offseta+npgfa_iset: z_offseta+2*npgfa_iset-1 )
          scon_a_iset = env( c_offseta: c_offseta+n1*ma-1 )
@@ -718,7 +744,7 @@ CONTAINS
          z_offsetb = bas_b(6, jset)
          c_offsetb = bas_b(7, jset)
          mb = nsgfb_jset
-         n2 = npgfb_jset*(ncoset(lb_max_jset) - ncoset(lb_min_jset - 1))
+         n2 = npgfb_jset*(ncoset(lb_max_jset) - ncoset(lb_min_jset-1))
          zetb_jset   = env( z_offsetb: z_offsetb+npgfb_jset-1 )
          rpgfb_jset  = env( z_offsetb+npgfb_jset: z_offsetb+2*npgfb_jset-1 )
          scon_b_jset = env( c_offsetb: c_offsetb+n2*mb-1 )
@@ -733,7 +759,7 @@ CONTAINS
          CALL overlap_ab_gpu(la_max_iset, la_min_iset, npgfa_iset, c_loc(rpgfa_iset(1)), c_loc(zeta_iset(1)), &
                              lb_max_jset, lb_min_jset, npgfb_jset, c_loc(rpgfb_jset(1)), c_loc(zetb_jset(1)), &
                              rab=c_loc(rab(1)), sab=c_loc(temp_sab_matrix(1,1)), lds=n2)
-
+         ! compare against cpu calculation with the same input
          CALL overlap_ab(la_max = la_max_iset, la_min = la_min_iset, npgfa=npgfa_iset, &
                              rpgfa=rpgfa_iset, zeta=zeta_iset, &
                              lb_max = lb_max_jset, lb_min = lb_min_jset, npgfb=npgfb_jset, &
@@ -743,7 +769,71 @@ CONTAINS
          temp_sab_matrix = transpose(temp_sab_matrix)
 
          if (sum(abs( temp_sab_matrix-temp_sab_matrix_cpu)) > 1.0E-10_dp ) then
-            print *, 'Diff', sum(abs( temp_sab_matrix-temp_sab_matrix_cpu))
+            print *, 'Check 1 Diff', sum(abs( temp_sab_matrix-temp_sab_matrix_cpu))
+            iset_iset = sab_nl_set( 6, set_slot )
+            jset_jset = sab_nl_set( 7, set_slot )
+            print *, set_slot, iset, jset, iset_iset, jset_jset, la_max_iset, la_min_iset, lb_max_jset, lb_min_jset, n1, n2
+            print *, 'GPU'
+            do i=1, n1
+               print *, temp_sab_matrix(i,:)
+            end do
+            print *, 'CPU'
+            do i=1, n1
+               print *, temp_sab_matrix_cpu(i,:)
+            end do
+            print *, '---------------------------------'
+         end if
+
+         ! compare against the results from the legacy routine called using the data from sab_nl
+         ikind = sab_nl(1)%nlist_task(slot)%ikind
+         jkind = sab_nl(1)%nlist_task(slot)%jkind
+         rab(1:3) = sab_nl(1)%nlist_task(slot)%r(1:3)
+         !
+         basis_set_a => basis_set_list_a(ikind)%gto_basis_set
+         IF (.NOT. ASSOCIATED(basis_set_a)) cycle
+         basis_set_b => basis_set_list_b(jkind)%gto_basis_set
+         IF (.NOT. ASSOCIATED(basis_set_b)) cycle
+         !
+         ! basis ikind
+         first_sgfa => basis_set_a%first_sgf
+         la_max => basis_set_a%lmax
+         la_min => basis_set_a%lmin
+         npgfa => basis_set_a%npgf
+         nseta = basis_set_a%nset
+         nsgfa => basis_set_a%nsgf_set
+         rpgfa => basis_set_a%pgf_radius
+         set_radius_a => basis_set_a%set_radius
+         scon_a => basis_set_a%scon
+         zeta => basis_set_a%zet
+         ! basis jkind
+         first_sgfb => basis_set_b%first_sgf
+         lb_max => basis_set_b%lmax
+         lb_min => basis_set_b%lmin
+         npgfb => basis_set_b%npgf
+         nsetb = basis_set_b%nset
+         nsgfb => basis_set_b%nsgf_set
+         rpgfb => basis_set_b%pgf_radius
+         set_radius_b => basis_set_b%set_radius
+         scon_b => basis_set_b%scon
+         zetb => basis_set_b%zet
+         !
+         iset_iset = sab_nl_set( 6, set_slot ) 
+         ncoa = npgfa(iset_iset)*ncoset(la_max(iset_iset))
+         n1 = npgfa(iset_iset)*(ncoset(la_max(iset_iset)) - ncoset(la_min(iset_iset)-1))
+         sgfa = first_sgfa(1, iset_iset)  
+         jset_jset = sab_nl_set( 7, set_slot )
+         ncob = npgfb(jset_jset)*ncoset(lb_max(jset_jset))
+         n2 = npgfb(jset_jset)*(ncoset(lb_max(jset_jset)) - ncoset(lb_min(jset_jset)-1))
+         sgfb = first_sgfb(1, jset_jset)
+
+         ! calculate integrals and derivatives
+         CALL overlap_ab(la_max(iset_iset), la_min(iset_iset), npgfa(iset_iset), &
+                         rpgfa(:, iset_iset), zeta(:, iset_iset), &
+                         lb_max(jset_jset), lb_min(jset_jset), npgfb(jset_jset), &
+                         rpgfb(:, jset_jset), zetb(:, jset_jset), &
+                         rab, sab=temp_sab_matrix_cpu)
+         if (sum(abs( temp_sab_matrix-temp_sab_matrix_cpu)) > 1.0E-10_dp ) then
+            print *, 'Check 2 Diff', sum(abs( temp_sab_matrix-temp_sab_matrix_cpu))
             iset_iset = sab_nl_set( 6, set_slot )
             jset_jset = sab_nl_set( 7, set_slot )
             print *, set_slot, iset, jset, iset_iset, jset_jset, la_max_iset, la_min_iset, lb_max_jset, lb_min_jset, n1, n2
@@ -773,84 +863,6 @@ CONTAINS
                           cb=cb, nb=n2, mb=mb, fscale=1.0_dp, trans=trans)
 !         rab2 = rab(1)*rab(1) + rab(2)*rab(2) + rab(3)*rab(3)
 !         dab = SQRT(rab2)
-
-!         ! compare against the results from legacy routine
-!         cell(:) = sab_nl(1)%nlist_task(slot)%cell(:)
-!         IF (use_cell_mapping) THEN
-!            ic = cell_to_index(cell(1), cell(2), cell(3))
-!            CPASSERT(ic > 0)
-!         ELSE
-!            ic = 1
-!         END IF
-
-!         ikind = sab_nl(1)%nlist_task(slot)%ikind
-!         jkind = sab_nl(1)%nlist_task(slot)%jkind
-!         basis_set_a => basis_set_list_a(ikind)%gto_basis_set
-!         basis_set_b => basis_set_list_b(jkind)%gto_basis_set
-!         iatom = sab_nl(1)%nlist_task(slot)%iatom
-!         jatom = sab_nl(1)%nlist_task(slot)%jatom
-
-!         IF (do_symmetric) THEN
-!            IF (iatom <= jatom) THEN
-!               irow = iatom
-!               icol = jatom
-!            ELSE
-!               irow = jatom
-!               icol = iatom
-!            END IF
-!            f0 = 2.0_dp
-!            ff = 2.0_dp
-!            IF (iatom == jatom) f0 = 1.0_dp
-!         ELSE
-!            irow = iatom
-!            icol = jatom
-!            f0 = 1.0_dp
-!            ff = 1.0_dp
-!         END IF
-
-!         allocate(sint(1))
-!         NULLIFY (sint(1)%block)
-!         IF (dokp) THEN
-!            CALL dbcsr_get_block_p(matrix=matrixkp_s(1, ic)%matrix, &
-!                                   row=irow, col=icol, BLOCK=sint(1)%block, found=found)
-!            CPASSERT(found)
-!         ELSE
-!            CALL dbcsr_get_block_p(matrix=matrix_s(1)%matrix, &
-!                                   row=irow, col=icol, BLOCK=sint(1)%block, found=found)
-!            CPASSERT(found)
-!         END IF
-
-         ! sint(1)%block( sgfa:sgfa+nsgfa(iset)-1 , sgfb:sgfb+nsgfb(jset)-1 )^trans += owork( 1:nsgfa(iset), 1:nsgfb(jset) )^trans
-!         CALL block_add("IN", owork, nsgfa(iset), nsgfb(jset), sint(1)%block, sgfa, sgfb, trans=trans)
-         ! sint(1)%block should point to the [nseta,nsetb] overlaps
-         !
-         ! find where in the sint(1)%block the qab matrix for this set_slot is
-         ! in the reference calculation
-         ! row
-         iset_iset = sab_nl_set( 6, set_slot )
-!         first_sgfa => basis_set_a%first_sgf
-!         sgfa = first_sgfa(1, iset_iset)
-         ! col
-         jset_jset = sab_nl_set( 7, set_slot )
-!         first_sgfb => basis_set_b%first_sgf
-!         sgfb = first_sgfb(1, jset_jset)
-         ! 
-!         if (trans) then
-!            temp_qab_matrix_ref = sint(1)%block(sgfb:sgfb+mb-1, sgfa:sgfa+ma-1)
-!         else
-!            temp_qab_matrix_ref = sint(1)%block(sgfa:sgfa+ma-1, sgfb:sgfb+mb-1)
-!         end if
-         if ( .true. .or. (iatom .eq. 2 .and. ( dab .lt. 10.0_dp ) )) then
-!            print *, 'Set slot', set_slot, slot, iset, jset, sab_dest, qab_dest, iatom, jatom
-!            print *, 'Overlap ', la_max_iset, la_min_iset, npgfa_iset, z_offseta, n1, &
-!                                 lb_max_jset, lb_min_jset, npgfb_jset, z_offsetb, n2, &
-!                                 rab, sab_dest
-!            print *, 'Contract', qab_dest, sab_dest, c_offseta, n1, ma, c_offsetb, n2, mb, trans
-!            print *, '        ', shape(temp_qab_matrix), shape(temp_sab_matrix), shape(ca), shape(cb)
-!            print *, 'Val', slot, iset_iset, jset_jset, ma, mb, trans, temp_qab_matrix
-!            !
-         end if
-
 
 !         print *, temp_qab_matrix_ref - temp_qab_matrix
 !         deallocate(sint)
